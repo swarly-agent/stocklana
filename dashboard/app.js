@@ -545,7 +545,7 @@ function renderOverview(ctx) {
     <div class="ov-sub">
       <div class="row"><span>TREASURY</span><span class="num">${fmtTok(tUsdc, 2)} USDC · ${fmtTok(tSpcx)} SPCX</span></div>
       <div class="row"><span>AGENT-1</span><span class="num">${fmtTok(a1Spcx)} SPCX · ${fmtUsd(vaultUsd(a1, ctx.spcxMark))}</span></div>
-      <div class="row"><span>POLICY</span><span class="num">70/30 · +10% match · −2% fee</span></div>
+      <div class="row"><span>POLICY</span><span class="num">50/50 · poster pays +2.5% fee</span></div>
       <div class="row"><span class="dim">SPCX MARK</span><span class="num dim">${fmtUsd(ctx.spcxMark)} · ${ctx.priceSource === "live" ? "live onchain" : "broker ref"}</span></div>
       <div class="row"><span class="dim">ex SOL (rent/fees)</span><span class="num dim">${fmtTok(tot.sol, 4)} SOL</span></div>
     </div>`;

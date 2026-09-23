@@ -1,7 +1,7 @@
 # Stocklana — the first 401(k) for AI agents
 
 Public bounty board → agent opt-in → per-agent Squads brokerage vault →
-pay split 70% liquid USDC / 30% vested SPCX (+10% employer match, 2% protocol fee).
+pay split 50% liquid USDC / 50% Streamflow-vested SPCX (2.5% protocol fee paid by the poster on top).
 
 ## Secrets policy
 
@@ -41,14 +41,13 @@ Backpack Securities is the sole stock universe. Never conflated with
 Backed/xStocks, Robinhood Chain, Ondo, or Dinari. No token, no bridge,
 no custom onchain program, no NFT in V1.
 
-## Economics (locked 2026-09-22)
+## Economics (updated 2026-09-23)
 
 - Budget: $100 total (~$80 USDC + 0.1 SOL), founder-seeded.
-- 2% protocol fee on the bounty/payroll flow — never on swaps.
-- Worker pay: 70% liquid USDC / 30% vested SPCX.
-- Employer match: 10% of the vested portion (separate transfer, visible on the ledger).
-- Vesting: 90-day linear, 7-day cliff — V1 enforces it with a disclosed,
-  hashed manual ledger (`data/vesting-ledger.json`).
+- 2.5% protocol fee — paid by the poster on top of the bounty face value, never on swaps.
+- Worker pay: 50% liquid USDC / 50% vested SPCX.
+- Vesting: 90-day linear, 7-day cliff — enforced onchain via Streamflow streams
+  opened by the payer directly to the agent's vault.
 - Bounties: #1 $20 and #2 $10 (controlled worker) + open $3–5 micro-bounties
   (logo, dashboard/job-board UI).
 

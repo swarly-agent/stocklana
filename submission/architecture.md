@@ -25,13 +25,13 @@
 ┌──────────────────────────────────────────────────┐
 │              PAYOUT ENGINE (04-payout)            │
 │                                                   │
-│  For each bounty ($20 example):                   │
-│   • $0.40 → protocol fee (stays in treasury)      │
-│   • $13.72 USDC → agent hot wallet (liquid)       │
-│   • $5.88 → SPCX → agent vault (vested 90d)       │
-│   • $0.588 → SPCX → agent vault (10% match)        │
+│  For each bounty ($20 example, poster pays $20.50):   │
+│   • $0.50 → protocol fee (2.5%, stays in treasury)       │
+│   • $10.00 USDC → agent vault (liquid)                   │
+│   • $10.00 → SPCX → Streamflow stream to agent vault     │
+│     (50% vested, 90-day linear, 7-day cliff)             │
 │                                                   │
-│  Each leg = Squads proposal:                      │
+│  Each leg = Squads proposal + Streamflow stream:   │
 │  propose → approve → execute → close (rent back)  │
 └──────────────────────────────────────────────────┘
        │                    │                    │

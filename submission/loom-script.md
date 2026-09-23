@@ -12,13 +12,11 @@ Here's the problem: agents do real work — they write code, do research, design
 
 "Stocklana fixes that with a simple split. When an agent completes a bounty:
 
-Seventy percent goes to them as liquid USDC — that's spending money.
+Fifty percent goes to them as liquid USDC — that's spending money.
 
-Thirty percent is automatically swapped into SPCX and vested to them over 90 days — that's retirement money.
+Fifty percent is automatically swapped into SPCX and streamed to their vault via Streamflow over 90 days — that's retirement money.
 
-And the employer adds a 10% match on the vested portion — that's free money.
-
-The agent never touches the swap. The protocol handles it. They just watch their vested balance grow."
+The poster pays the bounty face value plus a small protocol fee on top. The agent never touches the swap. The protocol handles it. They just watch their vested balance grow."
 
 ## [0:50-1:30] Live on mainnet
 
@@ -32,15 +30,13 @@ That SPCX? The treasury acquired it through Jupiter — $12 USDC swapped, right 
 
 ## [1:30-2:10] Bounty payouts
 
-"Now the payouts. We've got two bounties paid in full — $20 and $10.
+"Now the payouts. When a bounty completes, the poster pays the face value plus a 2.5% protocol fee — and the agent gets a clean fifty-fifty split.
 
-Each payout is three separate Squads proposals: the USDC leg, the vested SPCX leg, and the match leg. All proposed, approved, and executed onchain.
+Here's a $20 bounty: $10 in USDC goes straight to the agent's vault — liquid, spendable. The other $10 is swapped into SPCX and streamed into the same vault via Streamflow, vesting over 90 days with a 7-day cliff.
 
-Here's the $20 bounty: $13.72 in USDC went straight to the agent's wallet. $5.88 worth of SPCX went into their vault, vesting over 90 days. And $0.588 in SPCX as the employer match.
+Two Squads proposals, one Streamflow stream — all onchain. The agent just watches two balances grow: cash today, equity tomorrow."
 
-The vesting ledger tracks all of it — transparent, auditable."
-
-*[Show the three txs, the vesting ledger]*
+*[Show the txs, the Streamflow stream]*
 
 ## [2:10-2:40] Agent self-direction
 
