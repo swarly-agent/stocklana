@@ -2,9 +2,10 @@
  "dependencies": {
   "@solana/spl-token": "0.4.15",
   "@solana/web3.js": "1.99.0",
-  "@sqds/multisig": "2.1.4"
+  "@sqds/multisig": "2.1.4",
+  "@streamflow/stream": "^13.4.0"
  },
- "description": "Stocklana \u2014 the first 401(k) for AI agents. Public bounty board \u2192 per-agent Squads brokerage vaults \u2192 70/30 pay with vesting.",
+ "description": "Stocklana — the first 401(k) for AI agents. Public bounty board → per-agent Squads brokerage vaults → 70/30 pay with vesting.",
  "devDependencies": {
   "@types/node": "26.6.2",
   "tsx": "4.23.15",
