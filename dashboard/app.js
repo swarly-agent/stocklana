@@ -43,27 +43,19 @@ const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SPCX_MINT = "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb";
+const SOL_MINT = "So11111111111111111111111111111111111111112";
 const MINT_LABELS = { [USDC_MINT]: "USDC", [SPCX_MINT]: "SPCX" };
 
 // Treasury token accounts (recorded during mainnet setup, 2026-09-23)
 const TREASURY_USDC_ATA = "Bsk1Ei2jEYQT9m6tHU7wjkxdx4mSa3jbyUwBApJ7XPE3";
 const TREASURY_SPCX_ATA = "73UVXXtFXFMUGiGsdUWtRwq4Tj241Y4Kx7oJkh7txFXZ";
 
-// Known transactions, labeled from the committed snapshot + session records.
-const KNOWN_TX = {
-  "5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N":
-    { label: "TREASURY SPCX ACQUISITION · $12 → 0.077702 SPCX", type: "acq" },
-  "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ":
-    { label: "AGENT-1 ALLOCATION · $5 USDC → 0.032377 SPCX", type: "alloc" },
-};
-// USD volume attributed to known swap transactions (verified session records).
-const TX_USD_VOLUME = {
-  "5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N": 12,
-  "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ": 5,
-};
+// Transaction labels live in the snapshot's txRegistry (built by
+// 06-snapshot.ts from data/tx-registry.json) — never hardcoded here.
+// Only labeled signatures appear on the Activity Wire.
 
 const REPO_URL = "https://github.com/swarly-agent/stocklana";
-const POLICY_URL = REPO_URL + "/blob/main/policy/allocation-policy-v1.md";
+const POLICY_URL = REPO_URL + "/blob/main/policy/allocation-policy-v2.md";
 
 /* __STOCK_QUOTES_START__ */
 // Backpack Securities listings — UNDERLYING equity reference quotes (Yahoo Finance),
@@ -134,7 +126,8 @@ async function quoteLoop(ctx) {
 
 async function refreshLiveQuotes(ctx) {
   try {
-    const r = await fetch(JUP_PRICE_URL + STOCK_QUOTES.map((q) => q.mint).join(","));
+    // SOL rides along in the same batch — its mark feeds AUM, not the stocks tape.
+    const r = await fetch(JUP_PRICE_URL + STOCK_QUOTES.map((q) => q.mint).join(",") + "," + SOL_MINT);
     if (!r.ok) throw new Error("http " + r.status);
     const j = await r.json();
     let n = 0;
@@ -151,11 +144,21 @@ async function refreshLiveQuotes(ctx) {
     }
     quoteAuto.fails = 0;
     if (ctx) {
+      let revalued = false;
       // Re-mark AUM to the live SPCX quote so the tapes agree on one price.
       const spcx = STOCK_QUOTES.find((x) => x.sym === "SPCX");
       if (spcx?.live?.px) {
         ctx.spcxMark = spcx.live.px;
         ctx.priceSource = "live";
+        revalued = true;
+      }
+      const solP = j[SOL_MINT];
+      if (solP && solP.usdPrice) {
+        ctx.solMark = solP.usdPrice;
+        ctx.solPriceSource = "live";
+        revalued = true;
+      }
+      if (revalued) {
         renderTapes(ctx);
         renderOverview(ctx);
         if (!quotesUpgraded) { quotesUpgraded = true; renderAgents(ctx); }
@@ -307,9 +310,11 @@ function vestedFraction(sched, now) {
   return (now - start) / (end - start);
 }
 
-/** USD value of a vault: USDC + SPCX×implied (SOL excluded — rent/fees only). */
-function vaultUsd(vault, spcxImplied) {
-  return tokenBalance(vault, USDC_MINT) + tokenBalance(vault, SPCX_MINT) * spcxImplied;
+/** USD value of a vault: USDC + SPCX×mark + SOL×mark. SOL counts toward AUM. */
+function vaultUsd(vault, ctx) {
+  return tokenBalance(vault, USDC_MINT)
+    + tokenBalance(vault, SPCX_MINT) * ctx.spcxMark
+    + (vault.sol ?? 0) * (ctx.solMark ?? 0);
 }
 function bountyUsd(b) {
   const p = b.payout ?? {};
@@ -377,16 +382,42 @@ function allSigs(ctx) {
   return [...seen.values()].sort((a, b) => (b.blockTime ?? 0) - (a.blockTime ?? 0));
 }
 
+/** Label for a signature from the snapshot txRegistry. Unlabeled sigs are plain
+ *  onchain transactions (the Activity Wire only shows labeled ones). */
 function txLabelFor(sig, ctx) {
-  if (KNOWN_TX[sig]) return KNOWN_TX[sig];
-  for (const s of ctx.vesting) {
-    if (s.fundingTx === sig) return { label: s.id.toUpperCase() + " · VEST FUNDING", type: "vest" };
-    if (s.matchTx === sig) return { label: s.id.toUpperCase() + " · EMPLOYER MATCH", type: "match" };
+  const e = (ctx.txRegistry ?? {})[sig];
+  if (e) return { label: e.label ?? "ONCHAIN TRANSACTION", type: e.type ?? "" };
+  return { label: "ONCHAIN TRANSACTION", type: "" };
+}
+
+/** Unvested SPCX across the given active schedules, in USD at the SPCX mark. */
+function vestingUsd(schedules, ctx) {
+  const now = ctx.ts;
+  let spcx = 0;
+  for (const s of schedules ?? []) {
+    if (String(s.status).toLowerCase() !== "active") continue;
+    const total = Number(s.principalAmount) + Number(s.matchAmount);
+    spcx += total * (1 - vestedFraction(s, now));
   }
-  for (const b of ctx.bounties) {
-    if (b.payoutTx === sig) return { label: b.id.toUpperCase() + " · USDC PAYOUT", type: "payout" };
+  return spcx * ctx.spcxMark;
+}
+
+/** Swap volume per ET day over the trailing 7 days, from the tx registry. */
+function swapVolume7d(ctx) {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const p = etParts(ctx.ts - i * 86400);
+    days.push({ key: `${p.m}-${p.d}`, usd: 0, n: 0 });
   }
-  return { label: "ONCHAIN ACTIVITY", type: "" };
+  const idx = new Map(days.map((d, i) => [d.key, i]));
+  for (const e of Object.values(ctx.txRegistry ?? {})) {
+    if (e?.type !== "swap" || !e.ts) continue;
+    if (e.ts <= ctx.ts - 7 * 86400) continue;
+    const p = etParts(e.ts);
+    const d = days[idx.get(`${p.m}-${p.d}`)];
+    if (d) { d.usd += Number(e.usdVolume ?? 0); d.n += 1; }
+  }
+  return days;
 }
 
 /* ───────────────────────── renderers ───────────────────────── */
@@ -473,26 +504,35 @@ async function attemptLive(opts = {}) {
 
 function totals(ctx) {
   const t = ctx.vaults.treasury ?? {};
-  const agents = ["agent1", "agent2"].map((k) => ctx.vaults[k]).filter(Boolean);
+  const keys = agentKeys(ctx);
+  const agents = keys.map((k) => ctx.vaults[k]).filter(Boolean);
   const usdc = tokenBalance(t, USDC_MINT) + agents.reduce((s, v) => s + tokenBalance(v, USDC_MINT), 0);
   const spcx = tokenBalance(t, SPCX_MINT) + agents.reduce((s, v) => s + tokenBalance(v, SPCX_MINT), 0);
   const sol = (t.sol ?? 0) + agents.reduce((s, v) => s + (v.sol ?? 0), 0);
-  return { usdc, spcx, sol, usd: usdc + spcx * ctx.spcxMark };
+  const solMark = ctx.solMark ?? 0;
+  return { usdc, spcx, sol, usd: usdc + spcx * ctx.spcxMark + sol * solMark };
+}
+
+/** Data-driven agent vault keys — treasury excluded. Never hardcoded. */
+function agentKeys(ctx) {
+  return Object.keys(ctx.vaults ?? {}).filter((k) => k !== "treasury");
 }
 
 function renderTapes(ctx) {
-  // ── tape 1 · exchange AUM + holdings ──
+  // ── tape 1 · exchange AUM + holdings (no per-agent splits — detail lives in F2) ──
   const tot = totals(ctx);
   const mark = ctx.spcxMark;
   const markSrc = ctx.priceSource === "live" ? "LIVE" : "REF";
+  const solMark = ctx.solMark;
+  const solSrc = ctx.solPriceSource === "live" ? "LIVE" : (solMark ? "REF" : "—");
   const spcxUsd = tot.spcx * mark;
+  const solUsd = tot.sol * (solMark ?? 0);
   const aumItems = [
     `<span class="k">TOTAL AUM</span> <span class="up"><b>${fmtUsd(tot.usd)}</b></span>`,
+    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, ctx))}</span>`,
     `<span class="k">USDC</span> ${fmtTok(tot.usdc, 2)} <span class="k">·</span> <span class="up">${fmtUsd(tot.usdc)}</span>`,
     `<span class="k">SPCX</span> ${fmtTok(tot.spcx)} <span class="k">@</span> ${fmtUsd(mark)} <span class="k">${markSrc}</span> <span class="k">·</span> <span class="up">${fmtUsd(spcxUsd)}</span>`,
-    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, mark))}</span>`,
-    `<span class="k">AGENT-1</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, mark))}</span>`,
-    `<span class="k">AGENT-2</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, mark))}</span>`,
+    `<span class="k">SOL</span> ${fmtTok(tot.sol, 4)} <span class="k">@</span> ${solMark ? fmtUsd(solMark) : "—"} <span class="k">${solSrc}</span> <span class="k">·</span> <span class="up">${fmtUsd(solUsd)}</span>`,
   ];
   const aumHalf = aumItems.map((i) => `<span class="tape-item">${i}<span class="sep">///</span></span>`).join("");
   $("tape-aum").innerHTML = aumHalf + aumHalf; // duplicated for seamless loop
@@ -518,88 +558,160 @@ function renderTapes(ctx) {
   $("tape-stocks").innerHTML = stockHalf + stockHalf;
 }
 
-function swapVolume24h(ctx) {
-  const cutoff = ctx.ts - 86400;
-  let n = 0, usd = 0;
-  for (const s of allSigs(ctx)) {
-    if (!s.blockTime || s.blockTime < cutoff) continue;
-    const info = txLabelFor(s.signature, ctx);
-    if (info.type === "acq" || info.type === "alloc") {
-      n += 1;
-      usd += TX_USD_VOLUME[s.signature] ?? 0;
-    }
-  }
-  return { n, usd };
+/* ── footer: vault links rendered from the snapshot, never hardcoded ── */
+
+function renderFooterVaults(ctx) {
+  const el = $("foot-vaults");
+  if (!el) return;
+  el.innerHTML = (ctx.agents ?? []).map((a) => {
+    const label = String(a.id ?? a.key).toUpperCase();
+    const addr = a.vaultPda ?? a.key;
+    return `<a href="https://solscan.io/account/${esc(addr)}" target="_blank" rel="noopener">${esc(label)} VAULT</a>`;
+  }).join("");
 }
 
 /* ── F1 · exchange overview ── */
 
+/** Short uppercase label for an agent vault key, from the snapshot agent list. */
+function agentShortLabel(ctx, key) {
+  const a = (ctx.agents ?? []).find((x) => x.key === key);
+  return String(a?.id ?? key).toUpperCase();
+}
+function agentByKey(ctx, key) {
+  return (ctx.agents ?? []).find((x) => x.key === key) ?? { key, id: key, label: key };
+}
+
+/** AUM-over-time SVG from the committed aum-history.json. Honest when empty. */
+function aumHistorySvg(ctx) {
+  const hist = ctx.aumHistory ?? [];
+  if (hist.length === 0) {
+    return `<p class="empty-note">AUM history starts accumulating today — check back as snapshots land.</p>`;
+  }
+  const pts = hist.map((h) => ({
+    ts: h.ts,
+    usd: (h.usdc ?? 0) + (h.spcx ?? 0) * (h.spcxMark ?? 0) + (h.sol ?? 0) * (h.solMark ?? 0),
+  }));
+  const W = 260, H = 64, P = 6;
+  const vals = pts.map((p) => p.usd);
+  const lo = Math.min(...vals), hi = Math.max(...vals);
+  const span = hi - lo || 1;
+  const xy = pts.map((p, i) => {
+    const x = pts.length === 1 ? W / 2 : P + (i / (pts.length - 1)) * (W - 2 * P);
+    const y = H - P - ((p.usd - lo) / span) * (H - 2 * P);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return `<svg class="aum-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="AUM over time">
+      <polyline points="${xy}" fill="none" style="stroke:var(--green)" stroke-width="1.5"/>
+    </svg>
+    <div class="ov-sub"><div class="row"><span class="dim">${et(pts[0].ts)} → ${et(pts[pts.length - 1].ts)}</span><span class="num dim">${fmtUsd(vals[0])} → ${fmtUsd(vals[vals.length - 1])}</span></div></div>`;
+}
+
 function renderOverview(ctx) {
   const tot = totals(ctx);
   const t = ctx.vaults.treasury ?? {};
-  const tUsdc = tokenBalance(t, USDC_MINT);
-  const tSpcx = tokenBalance(t, SPCX_MINT);
-  const a1 = ctx.vaults.agent1 ?? {};
-  const a1Spcx = tokenBalance(a1, SPCX_MINT);
+  const aum = tot.usd;
 
-  // AUM
+  // ── total assets: TOTAL AUM → TREASURY → AGENT ACCOUNTS (top 5 + "N more") ──
+  const agentRows = agentKeys(ctx)
+    .map((k) => ({ key: k, usd: vaultUsd(ctx.vaults[k] ?? {}, ctx) }))
+    .sort((a, b) => b.usd - a.usd);
+  const tUsd = vaultUsd(t, ctx);
+  const topAgents = agentRows.slice(0, 5);
+  const moreN = agentRows.length - topAgents.length;
+  const pct = (v) => (aum ? (v / aum * 100).toFixed(1) + "%" : "—");
   $("ov-aum").innerHTML = `
-    <span class="ov-k">TOTAL ASSETS · AUM</span>
-    <div class="ov-v">${fmtUsd(tot.usd)}</div>
+    <span class="ov-k">TOTAL ASSETS IN CUSTODY · AUM</span>
+    <div class="ov-v">${fmtUsd(aum)}</div>
     <div class="ov-sub">
-      <div class="row"><span>TREASURY</span><span class="num">${fmtTok(tUsdc, 2)} USDC · ${fmtTok(tSpcx)} SPCX</span></div>
-      <div class="row"><span>AGENT-1</span><span class="num">${fmtTok(a1Spcx)} SPCX · ${fmtUsd(vaultUsd(a1, ctx.spcxMark))}</span></div>
-      <div class="row"><span>POLICY</span><span class="num">50/50 · poster pays +2.5% fee</span></div>
+      <div class="row"><span>TREASURY</span><span class="num">${fmtUsd(tUsd)} <span class="dim">${pct(tUsd)}</span></span></div>
+      <div class="row"><span class="dim">AGENT ACCOUNTS</span><span class="num dim">${agentRows.length}</span></div>
+      ${topAgents.map((a) => `
+      <div class="row"><span>${esc(agentShortLabel(ctx, a.key))}</span><span class="num">${fmtUsd(a.usd)} <span class="dim">${pct(a.usd)}</span></span></div>`).join("")}
+      ${moreN > 0 ? `<div class="row"><span class="dim">+ ${moreN} more</span><span class="num dim">see F2</span></div>` : ""}
       <div class="row"><span class="dim">BALANCES AS OF</span><span class="num dim">${ctx.balancesAt > 0 ? etClock(ctx.balancesAt) + " ET" : "—"}</span></div>
-      <div class="row"><span class="dim">SPCX MARK</span><span class="num dim">${fmtUsd(ctx.spcxMark)} · ${ctx.priceSource === "live" ? "live onchain" : "broker ref"}</span></div>
-      <div class="row"><span class="dim">ex SOL (rent/fees)</span><span class="num dim">${fmtTok(tot.sol, 4)} SOL</span></div>
     </div>`;
 
-  // Asset mix
+  // ── asset mix: platform totals + liquid-vs-vested ──
   const usdcUsd = tot.usdc;
   const spcxUsd = tot.spcx * ctx.spcxMark;
-  const mixTotal = usdcUsd + spcxUsd || 1;
+  const solUsd = tot.sol * (ctx.solMark ?? 0);
+  const mixTotal = usdcUsd + spcxUsd + solUsd || 1;
+  const vestUsd = vestingUsd(ctx.vesting, ctx);
+  const liqUsd = Math.max(0, aum - vestUsd);
+  const w = (v, d) => (v / d * 100).toFixed(2) + "%";
   $("ov-mix").innerHTML = `
     <span class="ov-k">ASSET MIX · USD</span>
-    <div class="ov-v">${fmtUsd(mixTotal)}</div>
+    <div class="ov-v">${fmtUsd(aum)}</div>
     <div class="mixbar" role="img" aria-label="asset mix">
-      <div class="seg-usdc" style="width:${(usdcUsd / mixTotal * 100).toFixed(2)}%"></div>
-      <div class="seg-spcx" style="width:${(spcxUsd / mixTotal * 100).toFixed(2)}%"></div>
+      <div class="seg-usdc" style="width:${w(usdcUsd, mixTotal)}"></div>
+      <div class="seg-spcx" style="width:${w(spcxUsd, mixTotal)}"></div>
+      <div class="seg-sol" style="width:${w(solUsd, mixTotal)}"></div>
     </div>
     <div class="mix-legend">
-      <span><span class="swatch" style="background:var(--green)"></span>USDC <b>${fmtUsd(usdcUsd)}</b> ${(usdcUsd / mixTotal * 100).toFixed(1)}%</span>
-      <span><span class="swatch" style="background:var(--amber)"></span>SPCX <b>${fmtUsd(spcxUsd)}</b> ${(spcxUsd / mixTotal * 100).toFixed(1)}%</span>
+      <span><span class="swatch" style="background:var(--green)"></span>USDC <b>${fmtUsd(usdcUsd)}</b></span>
+      <span><span class="swatch" style="background:var(--amber)"></span>SPCX <b>${fmtUsd(spcxUsd)}</b></span>
+      <span><span class="swatch" style="background:var(--blue)"></span>SOL <b>${fmtUsd(solUsd)}</b></span>
     </div>
-    <div class="ov-sub"><div class="row"><span class="dim">SOL (rent/fees)</span><span class="num dim">${fmtTok(tot.sol, 4)}</span></div></div>`;
-
-  // 24h activity
-  const vol = swapVolume24h(ctx);
-  const cutoff = ctx.ts - 86400;
-  const newScheds = ctx.vesting.filter((s) => Number(s.startTs) >= cutoff).length;
-  const tx24 = allSigs(ctx).filter((s) => s.blockTime && s.blockTime >= cutoff).length;
-  $("ov-activity").innerHTML = `
-    <span class="ov-k">24H ACTIVITY</span>
-    <div class="ov-v" style="color:var(--green)">${tx24} <span style="font-size:13px;font-weight:400;color:var(--muted)">TXNS</span></div>
-    <div class="ov-sub">
-      <div class="row"><span>SWAPS</span><span class="num">${vol.n} · ${fmtUsd(vol.usd)} vol</span></div>
-      <div class="row"><span>VESTING OPENED</span><span class="num">${newScheds} schedules</span></div>
-      <div class="row"><span>REFERENCE</span><span class="num dim">${et(ctx.ts)} ET</span></div>
+    <div class="mixbar thin" role="img" aria-label="liquid versus vesting">
+      <div class="seg-usdc" style="width:${w(liqUsd, aum || 1)}"></div>
+      <div class="seg-vest" style="width:${w(vestUsd, aum || 1)}"></div>
+    </div>
+    <div class="mix-legend">
+      <span><span class="swatch" style="background:var(--green)"></span>LIQUID <b>${fmtUsd(liqUsd)}</b></span>
+      <span><span class="swatch" style="background:var(--purple)"></span>VESTING <b>${fmtUsd(vestUsd)}</b></span>
     </div>`;
 
-  // Accounts
-  const agents = ["agent1", "agent2"].filter((k) => ctx.vaults[k]);
-  const activeVest = ctx.vesting.filter((s) => String(s.status).toLowerCase() === "active").length;
+  // ── activity: txn headline + 7d swap volume bars + AUM history ──
+  const vol7 = swapVolume7d(ctx);
+  const volTotal = vol7.reduce((s, d) => s + d.usd, 0);
+  const volN = vol7.reduce((s, d) => s + d.n, 0);
+  const maxVol = Math.max(1, ...vol7.map((d) => d.usd));
+  const bars = vol7.map((d) => `
+    <div class="vol-bar" title="${esc(d.key)} · ${fmtUsd(d.usd)} · ${d.n} swap${d.n === 1 ? "" : "s"}">
+      <div class="vol-fill" style="height:${(d.usd / maxVol * 100).toFixed(1)}%"></div>
+      <span class="vol-day">${esc(d.key.slice(3))}</span>
+    </div>`).join("");
+  $("ov-activity").innerHTML = `
+    <span class="ov-k">ACTIVITY</span>
+    <div class="ov-v">${allSigs(ctx).length} <span style="font-size:13px;font-weight:400;color:var(--muted)">TXNS</span></div>
+    <div class="ov-sub">
+      <div class="row"><span>7D SWAP VOLUME</span><span class="num">${fmtUsd(volTotal)} · ${volN} swaps</span></div>
+      <div class="row"><span class="dim">REFERENCE</span><span class="num dim">${et(ctx.ts)} ET</span></div>
+    </div>
+    <div class="vol-bars">${bars}</div>
+    <div class="ov-sub"><div class="row"><span>AUM HISTORY</span><span class="num dim">${(ctx.aumHistory ?? []).length} snapshots</span></div></div>
+    ${aumHistorySvg(ctx)}`;
+
+  // ── accounts: count + AUM donut + new this week ──
+  const segs = agentRows;
+  const segTotal = segs.reduce((s, x) => s + x.usd, 0) || 1;
+  const palette = ["#34d399", "#fbbf24", "#60a5fa", "#c084fc", "#f472b6", "#94a3b8"];
+  const R = 34, C = 2 * Math.PI * R;
+  let acc = 0;
+  const circles = segs.slice(0, 12).map((s, i) => {
+    const frac = s.usd / segTotal;
+    const dash = `${(frac * C).toFixed(2)} ${C.toFixed(2)}`;
+    const off = (-acc * C).toFixed(2);
+    acc += frac;
+    return `<circle cx="45" cy="45" r="${R}" fill="none" stroke="${palette[i % palette.length]}" stroke-width="12" stroke-dasharray="${dash}" stroke-dashoffset="${off}" transform="rotate(-90 45 45)"/>`;
+  }).join("");
+  const weekAgo = ctx.ts - 7 * 86400;
+  const newThisWeek = (ctx.agents ?? []).filter((a) => (a.createdTs ?? 0) >= weekAgo).length;
   $("ov-accounts").innerHTML = `
     <span class="ov-k">ACCOUNTS</span>
-    <div class="ov-v">${agents.length} <span style="font-size:13px;font-weight:400;color:var(--muted)">AGENTS</span></div>
-    <div class="ov-sub">
-      <div class="row"><span>AGENT-1</span><span class="num" style="color:var(--green)">ACTIVE · ${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, ctx.spcxMark))}</span></div>
-      <div class="row"><span>AGENT-2</span><span class="num dim">NEW · ${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, ctx.spcxMark))}</span></div>
-      <div class="row"><span>VESTING</span><span class="num">${activeVest} active schedules</span></div>
+    <div class="ov-v">${segs.length} <span style="font-size:13px;font-weight:400;color:var(--muted)">AGENTS</span></div>
+    <div class="acct-flex">
+      <svg class="donut" viewBox="0 0 90 90" role="img" aria-label="agent accounts by AUM">${circles || `<circle cx="45" cy="45" r="${R}" fill="none" stroke="var(--border)" stroke-width="12"/>`}</svg>
+      <div class="ov-sub" style="flex:1">
+        ${segs.slice(0, 5).map((s, i) => `
+        <div class="row"><span><span class="swatch" style="background:${palette[i % palette.length]}"></span>${esc(agentShortLabel(ctx, s.key))}</span><span class="num">${fmtPct(s.usd / segTotal)}</span></div>`).join("")}
+        ${segs.length > 5 ? `<div class="row"><span class="dim">+${segs.length - 5} more</span><span class="num dim">see F2</span></div>` : ""}
+        <div class="row"><span>NEW THIS WEEK</span><span class="num" style="color:var(--green)">${newThisWeek}</span></div>
+      </div>
     </div>`;
 }
 
-/* ── F2 · agent accounts (collapsible) ── */
+/* ── F2 · agent accounts: data-driven, top 100, paginated, searchable ── */
 
 function schedStatus(s, now) {
   const start = Number(s.startTs);
@@ -624,7 +736,7 @@ function schedHtml(s, ctx) {
   return `<div class="vest-sched">
     <div class="vest-top">
       <span class="vest-id">${esc(s.id)}</span>
-      <span class="muted">90d linear · 7d cliff</span>
+      <span class="muted">${s.durationDays}d linear · ${s.cliffDays}d cliff</span>
     </div>
     <div class="timeline">
       <div class="elapsed" style="width:${elapsedPct.toFixed(2)}%"></div>
@@ -637,54 +749,58 @@ function schedHtml(s, ctx) {
     <div class="vest-meta">
       <strong style="color:${st.color}">${st.txt}</strong> · ${esc(st.sub)}<br>
       vested <strong style="color:var(--text)">${fmtTok(vested)} / ${fmtTok(total)} SPCX</strong><br>
-      principal ${fmtTok(s.principalAmount)} SPCX (${fmtUsd(s.principalUsd)}) + match ${fmtTok(s.matchAmount)} SPCX (${fmtUsd(s.matchUsd)})<br>
-      fund ${txLink(s.fundingTx)} · match ${txLink(s.matchTx)}<br>
+      vesting total ${fmtTok(total)} SPCX · ${fmtUsd(total * ctx.spcxMark)} at mark<br>
+      fund ${txLink(s.fundingTx)}<br>
       <span class="dim">enforcement: ${esc(s.enforcement ?? "ledger-manual — disclosed, not a program")}</span>
     </div>
   </div>`;
 }
 
+const AGENTS_PAGE_SIZE = 10;
+let agentsPage = 0;
+let agentsQuery = "";
+let agentsCtx = null;
+
 function renderAgents(ctx) {
-  const order = ["agent1", "agent2"];
-  const ids = { agent1: "agent-1", agent2: "agent-2" };
-  // Preserve manually-expanded cards across background re-renders.
+  agentsCtx = ctx;
+  const q = agentsQuery.trim().toLowerCase();
+  let list = agentKeys(ctx).map((key) => {
+    const meta = agentByKey(ctx, key);
+    const v = ctx.vaults[key] ?? {};
+    const acctUsd = vaultUsd(v, ctx);
+    const vestUsd = vestingUsd((ctx.vesting ?? []).filter((s) => s.agent === meta.id), ctx);
+    return { key, meta, v, acctUsd, vestUsd, liqUsd: Math.max(0, acctUsd - vestUsd) };
+  });
+  list.sort((a, b) => b.acctUsd - a.acctUsd);
+  list = list.slice(0, 100); // top 100
+  const filtered = q
+    ? list.filter((a) =>
+        String(a.meta.vaultPda ?? "").toLowerCase().includes(q) ||
+        String(a.meta.label ?? "").toLowerCase().includes(q) ||
+        String(a.meta.id ?? "").toLowerCase().includes(q))
+    : list;
+  const pages = Math.max(1, Math.ceil(filtered.length / AGENTS_PAGE_SIZE));
+  agentsPage = Math.min(agentsPage, pages - 1);
+  const page = filtered.slice(agentsPage * AGENTS_PAGE_SIZE, (agentsPage + 1) * AGENTS_PAGE_SIZE);
+
+  // Preserve expanded cards + search focus across background re-renders.
   const openCards = new Set(
     [...document.querySelectorAll("#agents-body .agent-card.open")].map((c) => c.getAttribute("data-agent"))
   );
-  $("agents-meta").textContent = order.filter((k) => ctx.vaults[k]).length + " squads vaults · click to expand";
+  const searchEl = $("agents-search");
+  const hadFocus = searchEl && document.activeElement === searchEl;
+  const caret = hadFocus ? searchEl.selectionStart : 0;
 
-  $("agents-body").innerHTML = order.map((key, i) => {
-    const v = ctx.vaults[key];
-    if (!v) return "";
-    const id = ids[key];
-    const label = ctx.agentLabels[id] ?? id;
+  $("agents-meta").textContent = `${filtered.length} account${filtered.length === 1 ? "" : "s"} · click to expand`;
+
+  const cards = page.map((a) => {
+    const { key, meta, v } = a;
     const usdc = tokenBalance(v, USDC_MINT);
-    const spcx = tokenBalance(v, SPCX_MINT);
-    const acctUsd = vaultUsd(v, ctx.spcxMark);
-    const scheds = ctx.vesting.filter((s) => s.agent === id);
-    const earned = ctx.bounties.filter((b) => b.claimant === id);
-    const active = spcx > 0 || usdc > 0 || scheds.length > 0;
-
+    const scheds = (ctx.vesting ?? []).filter((s) => s.agent === meta.id);
+    const isOpen = openCards.has(key);
     const vestHtml = scheds.length
       ? scheds.map((s) => schedHtml(s, ctx)).join("")
-      : `<p class="empty-note">no vesting schedules — complete a bounty to open one.</p>`;
-
-    const earnHtml = earned.length
-      ? earned.map((b) => {
-          const p = b.payout ?? {};
-          const matchUsd = (p.spcxVesting ?? 0) * ((p.matchBps ?? 0) / 10000);
-          const paidTs = b.payoutTx ? ctx.sigTs?.[b.payoutTx] : null;
-          return `<div class="earn-row">
-            <span><code>${esc(b.id)}</code> · ${esc(b.title)}<br>
-            <span class="muted small">paid ${paidTs ? et(paidTs) + " ET" : "—"}</span></span>
-            <span class="num"><span style="color:var(--green)">${fmtUsd(p.usdc)} USDC</span><br>
-            <span style="color:var(--amber)">${fmtUsd(p.spcxVesting)} SPCX</span> <span class="dim small">vested</span><br>
-            <span class="dim small">+${fmtUsd(matchUsd)} match</span><br>
-            <span class="small">${txLink(b.payoutTx)}</span></span>
-          </div>`;
-        }).join("")
-      : `<p class="empty-note">no earnings yet — claim a bounty to fund this account.</p>`;
-
+      : `<p class="empty-note">no vesting schedules.</p>`;
     const swapHtml = (v.recentSigs ?? []).length
       ? (v.recentSigs ?? []).slice(0, 8).map((s) => {
           const info = txLabelFor(s.signature, ctx);
@@ -696,36 +812,29 @@ function renderAgents(ctx) {
         }).join("")
       : `<p class="empty-note">no onchain history yet.</p>`;
 
-    return `<div class="agent-card${openCards.has(id) ? " open" : ""}" data-agent="${id}">
-      <div class="agent-head" role="button" tabindex="0" aria-expanded="${openCards.has(id)}">
-        <span class="status-dot ${active ? "on" : "idle"}"></span>
-        <span class="agent-id">AGENT-${i + 1}</span>
-        <span class="agent-label">${esc(label)}</span>
+    return `<div class="agent-card${isOpen ? " open" : ""}" data-agent="${esc(key)}">
+      <div class="agent-head" role="button" tabindex="0" aria-expanded="${isOpen}">
+        <span class="status-dot ${a.acctUsd > 0 ? "on" : "idle"}"></span>
+        <span class="agent-id">${esc(agentShortLabel(ctx, key))}</span>
+        <span class="agent-label">${esc(meta.label ?? "")}</span>
         <span class="chev">▸</span>
       </div>
       <div class="agent-summary">
-        <div class="sum-cell"><span class="k">ACCOUNT VALUE</span><span class="v">${fmtUsd(acctUsd)}</span></div>
-        <div class="sum-cell"><span class="k">SPCX</span><span class="v" style="color:var(--amber)">${fmtTok(spcx)}</span></div>
+        <div class="sum-cell"><span class="k">ACCOUNT VALUE</span><span class="v">${fmtUsd(a.acctUsd)}</span></div>
         <div class="sum-cell"><span class="k">USDC</span><span class="v" style="color:var(--green)">${fmtTok(usdc, 2)}</span></div>
-        <div class="sum-cell"><span class="k">SOL</span><span class="v">${fmtTok(v.sol, 4)}</span></div>
-        <div class="sum-cell"><span class="k">VESTING</span><span class="v">${scheds.length}</span></div>
-        <div class="sum-cell"><span class="k">EARNED</span><span class="v">${earned.length} ${earned.length === 1 ? "bounty" : "bounties"}</span></div>
+        <div class="sum-cell"><span class="k">LIQUID</span><span class="v">${fmtUsd(a.liqUsd)}</span></div>
       </div>
       <div class="agent-detail">
         <div class="agent-sec">
           <h4>ADDRESSES</h4>
           <table class="addr-table"><tbody>
-            <tr><td class="lbl">VAULT PDA</td><td>${addrCell(v.vaultPda)}</td></tr>
-            <tr><td class="lbl">MULTISIG</td><td>${addrCell(v.multisigPda)}</td></tr>
+            <tr><td class="lbl">VAULT PDA</td><td>${addrCell(meta.vaultPda)}</td></tr>
+            <tr><td class="lbl">MULTISIG</td><td>${addrCell(meta.multisigPda)}</td></tr>
           </tbody></table>
         </div>
         <div class="agent-sec">
           <h4>VESTING SCHEDULES · ${scheds.length}</h4>
           ${vestHtml}
-        </div>
-        <div class="agent-sec">
-          <h4>EARNINGS HISTORY</h4>
-          ${earnHtml}
         </div>
         <div class="agent-sec">
           <h4>ONCHAIN HISTORY</h4>
@@ -734,69 +843,54 @@ function renderAgents(ctx) {
       </div>
     </div>`;
   }).join("");
+
+  $("agents-body").innerHTML = `
+    <div class="agents-toolbar">
+      <input id="agents-search" type="search" placeholder="search by vault address…" value="${esc(agentsQuery)}" aria-label="search agent accounts">
+      <span class="dim small">${filtered.length} of ${list.length} shown</span>
+    </div>
+    ${cards || `<p class="empty-note">no agent accounts match.</p>`}
+    ${pages > 1 ? `<div class="pager">
+      <button class="chip" data-agents-page="prev"${agentsPage === 0 ? " disabled" : ""}>← PREV</button>
+      <span class="dim small">page ${agentsPage + 1} of ${pages}</span>
+      <button class="chip" data-agents-page="next"${agentsPage >= pages - 1 ? " disabled" : ""}>NEXT →</button>
+    </div>` : ""}`;
+
+  const input = $("agents-search");
+  if (input?.addEventListener) {
+    if (hadFocus) { input.focus(); try { input.setSelectionRange(caret, caret); } catch {} }
+    input.addEventListener("input", (e) => {
+      agentsQuery = e.target.value;
+      agentsPage = 0;
+      renderAgents(ctx);
+      const el = $("agents-search");
+      if (el) {
+        el.focus();
+        const pos = e.target.selectionStart ?? el.value.length;
+        try { el.setSelectionRange(pos, pos); } catch {}
+      }
+    });
+  }
 }
 
-/* ── F3 · activity wire ── */
+/* ── F3 · activity wire: registry-driven, opens with the full-economics test ── */
 
-const FEED_ICONS = { acq: "◈", alloc: "⇄", payout: "$", vest: "◐", match: "+", bounty: "◎" };
+const FEED_ICONS = { swap: "⇄", payout: "$", vesting: "◐" };
 
 /* ── wire filters + grouping state ── */
 
 const FEED_FILTERS = [
   { id: "all",     label: "ALL" },
-  { id: "swaps",   label: "SWAPS",   types: ["acq", "alloc"] },
+  { id: "swaps",   label: "SWAPS",   types: ["swap"] },
   { id: "payouts", label: "PAYOUTS", types: ["payout"] },
-  { id: "vesting", label: "VESTING", types: ["vest"] },
-  { id: "matches", label: "MATCHES", types: ["match"] },
-  { id: "bounties",label: "BOUNTIES",types: ["bounty"] },
+  { id: "vesting", label: "VESTING", types: ["vesting"] },
 ];
 let feedFilter = "all";
 let feedCtx = null;
 
-// Group key for a signature: bounty lifecycles, swaps, or ungrouped.
-function groupForSig(sig, ctx) {
-  for (const b of ctx.bounties) {
-    if (b.payoutTx === sig) return "g-" + b.id;
-  }
-  for (const s of ctx.vesting) {
-    const key = String(s.id ?? "").replace(/^vest-/, "");
-    if (s.fundingTx === sig || s.matchTx === sig) return "g-" + key;
-  }
-  const info = KNOWN_TX[sig];
-  if (info && (info.type === "acq" || info.type === "alloc")) return "g-swaps";
-  return null;
-}
-
-function groupTitle(key, ctx) {
-  if (key === "g-swaps") return "TREASURY + AGENT SWAPS";
-  if (key === "g-vesting") return "VESTING STATUS · LIVE";
-  const id = String(key).replace(/^g-/, "");
-  const b = ctx.bounties.find((x) => x.id === id);
-  if (b) return `${b.id.toUpperCase()} LIFECYCLE · ${esc(b.title)}`;
-  return id.toUpperCase();
-}
-
-function feedDescribe(sig, ctx) {
-  const info = txLabelFor(sig, ctx);
-  if (info.type === "acq") return "TREASURY ACQUIRED 0.077702 SPCX FOR $12 USDC VIA JUPITER";
-  if (info.type === "alloc") return "AGENT-1 SWAPPED $5 USDC → 0.032377 SPCX · POLICY-VALIDATED";
-  for (const b of ctx.bounties) {
-    if (b.payoutTx === sig) {
-      const p = b.payout ?? {};
-      const matchUsd = (p.spcxVesting ?? 0) * ((p.matchBps ?? 0) / 10000);
-      return `${b.id.toUpperCase()} PAID ${fmtUsd(bountyUsd(b))} → ${esc(b.claimant ?? "?").toUpperCase()} · ${fmtUsd(p.usdc)} USDC + ${fmtUsd(p.spcxVesting)} SPCX VESTED + ${fmtUsd(matchUsd)} MATCH`;
-    }
-  }
-  for (const s of ctx.vesting) {
-    if (s.fundingTx === sig) return `${s.id.toUpperCase()} FUNDED · ${fmtTok(s.principalAmount)} SPCX → 90D VEST · 7D CLIFF`;
-    if (s.matchTx === sig) return `EMPLOYER MATCH · ${fmtTok(s.matchAmount)} SPCX → ${s.id.toUpperCase()}`;
-  }
-  return info.label;
-}
-
 function feedItemHtml(e) {
   return `<div class="feed-item">
-    <span class="feed-ts">${et(e.ts)}${e.live ? " ·" : ""}</span>
+    <span class="feed-ts">${et(e.ts)}</span>
     <span class="feed-type ${e.type}">${FEED_ICONS[e.type] ?? ""} ${e.type.toUpperCase()}</span>
     <span class="feed-body">${e.body}${e.sig ? `<span class="sig">${txLink(e.sig)}</span>` : ""}</span>
   </div>`;
@@ -804,51 +898,29 @@ function feedItemHtml(e) {
 
 function renderFeed(ctx) {
   feedCtx = ctx;
-  const now = ctx.ts;
-  // Preserve manually-expanded groups across background re-renders
-  // (auto-retries re-render the wire; collapsing the user's view would be rude).
+  // Preserve manually-expanded groups across background re-renders.
   const openGroups = new Set(
     [...document.querySelectorAll("#feed-body .feed-group.open")].map((g) => g.getAttribute("data-group"))
   );
+
+  // The wire opens with the full-economics test: only registry entries at or
+  // after wireStartTs are shown. Before that, an honest empty state — old
+  // acquisition/allocation/payout/match/bounty history is excluded, and sweep
+  // transactions are never registered.
   const events = [];
-
-  for (const s of allSigs(ctx)) {
-    if (!s.blockTime) continue;
-    const info = txLabelFor(s.signature, ctx);
-    if (!info.type) continue; // wire shows labeled protocol events only
-    events.push({
-      ts: s.blockTime,
-      type: info.type,
-      body: feedDescribe(s.signature, ctx),
-      sig: s.signature,
-      group: groupForSig(s.signature, ctx),
-    });
+  if (ctx.wireStartTs) {
+    for (const [sig, e] of Object.entries(ctx.txRegistry ?? {})) {
+      if (!e?.ts || e.ts < ctx.wireStartTs) continue;
+      events.push({
+        ts: e.ts,
+        type: e.type,
+        body: esc(e.label ?? "ONCHAIN TRANSACTION"),
+        sig,
+        group: "g-" + (e.agent ?? "treasury"),
+      });
+    }
+    events.sort((a, b) => b.ts - a.ts);
   }
-
-  for (const b of ctx.bounties) {
-    if (!b.postedTs) continue;
-    events.push({
-      ts: b.postedTs,
-      type: "bounty",
-      body: `BOUNTY POSTED · ${b.id.toUpperCase()} — ${esc(b.title)} (${fmtUsd(bountyUsd(b))})`,
-      sig: null,
-      group: "g-" + b.id,
-    });
-  }
-
-  for (const s of ctx.vesting) {
-    const start = Number(s.startTs);
-    const cliffTs = start + Number(s.cliffDays) * 86400;
-    const total = Number(s.principalAmount) + Number(s.matchAmount);
-    const frac = vestedFraction(s, now);
-    const day = Math.max(0, Math.floor((now - start) / 86400));
-    const txt = now < cliffTs
-      ? `${s.id.toUpperCase()} · DAY ${day}/${s.durationDays} · <span class="feed-now">IN CLIFF</span> — first release in ${((cliffTs - now) / 86400).toFixed(1)}d`
-      : `${s.id.toUpperCase()} · DAY ${day}/${s.durationDays} · ${fmtTok(total * frac)} / ${fmtTok(total)} SPCX VESTED (${fmtPct(frac)})`;
-    events.push({ ts: now, type: "vest", body: txt, sig: null, live: true, group: "g-vesting" });
-  }
-
-  events.sort((a, b) => b.ts - a.ts);
 
   // apply the active type filter
   const f = FEED_FILTERS.find((x) => x.id === feedFilter) ?? FEED_FILTERS[0];
@@ -871,10 +943,12 @@ function renderFeed(ctx) {
       seen.add(e.group);
       const evs = groups.get(e.group);
       const isOpen = expand || openGroups.has(e.group);
+      const gkey = e.group.slice(2);
+      const title = gkey === "treasury" ? "TREASURY" : agentShortLabel(ctx, gkey);
       html += `<div class="feed-group${isOpen ? " open" : ""}" data-group="${esc(e.group)}">
         <div class="group-head" role="button" tabindex="0" aria-expanded="${isOpen}">
           <span class="chev">▸</span>
-          <span class="group-title">${groupTitle(e.group, ctx)}</span>
+          <span class="group-title">${esc(title)}</span>
           <span class="group-count">${evs.length} event${evs.length === 1 ? "" : "s"}</span>
           <span class="group-ts">${et(evs[0].ts)}</span>
         </div>
@@ -888,12 +962,18 @@ function renderFeed(ctx) {
   const chips = FEED_FILTERS.map((x) =>
     `<button class="chip${x.id === feedFilter ? " active" : ""}" data-feed-filter="${x.id}">${x.label}</button>`).join("");
 
-  $("feed-meta").textContent = f.id === "all"
-    ? `${events.length} events · newest first`
-    : `${list.length} of ${events.length} events · ${f.label}`;
+  const emptyNote = !ctx.wireStartTs
+    ? `<p class="empty-note">THE WIRE OPENS WITH THE FULL-ECONOMICS TEST — new transactions will appear here as they land onchain.</p>`
+    : `<p class="loading">no activity for this filter.</p>`;
+
+  $("feed-meta").textContent = !ctx.wireStartTs
+    ? "opens with the full-economics test"
+    : (f.id === "all"
+        ? `${events.length} events · newest first`
+        : `${list.length} of ${events.length} events · ${f.label}`);
   $("feed-body").innerHTML = list.length
     ? `<div class="feed-filters" role="group" aria-label="filter activity">${chips}</div><div class="feed">${html}</div>`
-    : `<div class="feed-filters" role="group" aria-label="filter activity">${chips}</div><p class="loading">no activity for this filter.</p>`;
+    : `<div class="feed-filters" role="group" aria-label="filter activity">${chips}</div>${emptyNote}`;
 }
 
 /* ── F4 · bounty board ── */
@@ -1012,6 +1092,15 @@ document.addEventListener("click", (e) => {
     });
     return;
   }
+  // agent pager buttons
+  const pg = e.target.closest("[data-agents-page]");
+  if (pg) {
+    if (!pg.disabled) {
+      agentsPage += pg.getAttribute("data-agents-page") === "next" ? 1 : -1;
+      if (agentsCtx) renderAgents(agentsCtx);
+    }
+    return;
+  }
   // feed filter chips
   const chip = e.target.closest("[data-feed-filter]");
   if (chip) {
@@ -1068,6 +1157,9 @@ async function boot() {
   const s0 = (snap.vesting?.schedules ?? [])[0];
   const spcxImplied = s0 ? Number(s0.principalUsd) / Number(s0.principalAmount) : 154.44;
 
+  // AUM-over-time history (separate committed file, maintained by 06-snapshot.ts).
+  const aumHistory = await optional(fetchJson("aum-history.json"));
+
   // Agent labels from the repo registry when reachable (not on Pages) — else the id.
   const agentsReg = await optional(fetchJson("../data/agents.json"));
   const agentLabels = {};
@@ -1090,6 +1182,10 @@ async function boot() {
     vaults: snap.vaults ?? {},
     bounties: snap.bounties ?? [],
     vesting: snap.vesting?.schedules ?? [],
+    agents: snap.agents ?? [],
+    txRegistry: snap.txRegistry ?? {},
+    wireStartTs: snap.wireStartTs ?? null,
+    aumHistory: Array.isArray(aumHistory) ? aumHistory : [],
     policySha: snap.policy?.sha256 ?? null,
     agentLabels,
     spcxImplied,
@@ -1107,6 +1203,7 @@ async function boot() {
   renderAgents(ctx);
   renderFeed(ctx);
   renderBounties(ctx);
+  renderFooterVaults(ctx);
 
   // Live quote feed (independent of RPC tier): immediate fetch, then
   // self-scheduling with backoff — upgrades the SPCX mark + stocks tape.

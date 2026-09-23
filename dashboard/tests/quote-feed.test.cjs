@@ -231,14 +231,52 @@ async function settleRefresh() {
   ok(quoteAuto.timer !== null, "quote retry scheduled");
   ok(/quote-retry-note/.test(els.get("tape-stocks").innerHTML), "tape has quote retry note slot");
 
-  // 14. Feed preserves expanded groups across re-renders
-  await scenario("feed-preserve", null);
-  global.__openEls = [{ _sel: "#feed-body .feed-group.open", getAttribute: () => "g-bounty-001" }];
-  renderFeed(bootCtx());
-  const fb = els.get("feed-body").innerHTML;
-  ok(fb.includes('data-group="g-bounty-001"') && /feed-group open/.test(fb), "expanded group survives re-render");
+  // 14. Wire gate: null wireStartTs -> honest empty state, no old history leaks in
+  await scenario("feed-gate", null);
+  const fbGate = els.get("feed-body").innerHTML;
+  ok(/OPENS WITH THE FULL-ECONOMICS TEST/.test(fbGate), "wire shows honest empty state before the gate");
+  ok(/opens with the full-economics test/.test(els.get("feed-meta").textContent), "feed meta explains the gate");
+  ok(!/ACQUISITION|ALLOCATION/.test(fbGate), "no old-economy rows before the gate");
 
-  // 15. Address regression: vault addresses always come from the committed
+  // 15. Wire opens once the gate is set: only entries >= startTs render,
+  // grouped per agent, and expanded groups survive re-renders
+  const wctx = bootCtx();
+  const nowSec = Math.floor(Date.now() / 1000);
+  wctx.wireStartTs = nowSec - 7200;
+  wctx.txRegistry = {
+    "sigA1111111111111111111111111111111111111111111111111111": { label: "AGENT SWAP · $10 USDC → SPCX VIA JUPITER", type: "swap", usdVolume: 10, agent: "agent1", ts: nowSec - 3600 },
+    "sigB2222222222222222222222222222222222222222222222222222": { label: "PAYOUT · $20 INCENTIVE → AGENT-1", type: "payout", usdVolume: 20, agent: "agent1", ts: nowSec - 1800 },
+    "sigOld33333333333333333333333333333333333333333333333333": { label: "OLD SWAP (pre-gate)", type: "swap", usdVolume: 5, agent: "agent1", ts: nowSec - 10800 },
+  };
+  global.__openEls = [{ _sel: "#feed-body .feed-group.open", getAttribute: () => "g-agent1" }];
+  renderFeed(wctx);
+  const fb = els.get("feed-body").innerHTML;
+  ok(fb.includes('data-group="g-agent1"') && /feed-group open/.test(fb), "expanded group survives re-render");
+  ok(fb.includes("sigA111") && fb.includes("sigB222"), "post-gate events render");
+  ok(!fb.includes("sigOld333"), "pre-gate entries excluded");
+  ok(/data-feed-filter="swaps"/.test(fb) && /data-feed-filter="payouts"/.test(fb) && /data-feed-filter="vesting"/.test(fb),
+    "filters are ALL/SWAPS/PAYOUTS/VESTING");
+  ok(!/data-feed-filter="matches"|data-feed-filter="bounties"/.test(fb), "no MATCHES/BOUNTIES filters");
+
+  // 16. F1 rebuild: no bounty/policy language, 7d bars + AUM history present
+  const f1 = els.get("ov-aum").innerHTML + els.get("ov-mix").innerHTML +
+    els.get("ov-activity").innerHTML + els.get("ov-accounts").innerHTML;
+  ok(/TOTAL ASSETS IN CUSTODY/.test(els.get("ov-aum").innerHTML), "F1 header is custody language");
+  ok(!/POLICY|SPCX MARK|bounty/i.test(f1), "no bounty/policy rows in F1");
+  ok(/vol-bar/.test(els.get("ov-activity").innerHTML), "7d swap-volume bars render");
+  ok(/aum-chart|accumulating today/.test(els.get("ov-activity").innerHTML), "AUM history chart or honest note");
+  ok(/VESTING/.test(els.get("ov-mix").innerHTML), "F1 mix shows liquid-vs-vesting");
+  ok(/donut/.test(els.get("ov-accounts").innerHTML) && /NEW THIS WEEK/.test(els.get("ov-accounts").innerHTML),
+    "F1 accounts has AUM donut + new-this-week");
+
+  // 17. F2 data-driven: agents from snapshot, searchable, no hardcoded econ language
+  const f2 = els.get("agents-body").innerHTML;
+  ok(/AGENT-1/.test(f2) && /AGENT-2/.test(f2), "agent cards render from snapshot agents");
+  ok(/id="agents-search"/.test(f2), "F2 has vault-address search");
+  ok(!/EARNED|50\/50|employer match/i.test(f2), "no earned/match/50-50 language in F2");
+  ok(/ACCOUNT VALUE/.test(f2) && /LIQUID/.test(f2) && /VESTING SCHEDULES/.test(f2), "F2 summary cells + vesting");
+
+  // 18. Address regression: vault addresses always come from the committed
   // snapshot, so a mangled ctx.vaults can't break the next refresh
   await scenario("probe-regression", () => { rpcMode = "agent2-down"; });
   delete bootCtx().vaults.treasury; // simulate prior degraded load without treasury

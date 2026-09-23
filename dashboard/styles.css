@@ -18,6 +18,7 @@
   --green:     #2fd98a;
   --red:       #ff5252;
   --blue:      #5aa9ff;
+  --purple:    #c084fc;
   --mono: "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas,
           "DejaVu Sans Mono", "Roboto Mono", monospace;
 }
@@ -646,3 +647,31 @@ footer {
 .road .pill { margin-bottom: 6px; display: inline-block; }
 .road p { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 @media (max-width: 700px) { .about-cols { grid-template-columns: 1fr; } }
+
+/* ══════════ F1 REBUILD: volume bars, AUM history, accounts donut ══════════ */
+.mixbar .seg-sol { background: var(--blue); }
+.mixbar .seg-vest { background: var(--purple); }
+.mixbar.thin { height: 8px; }
+.vol-bars { display: flex; align-items: stretch; gap: 4px; height: 76px; margin: 8px 0 4px; }
+.vol-bar { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; }
+.vol-fill { width: 100%; background: var(--green); opacity: 0.8; min-height: 2px; }
+.vol-day { font-size: 8px; color: var(--dim); text-align: center; margin-top: 2px; white-space: nowrap; }
+.aum-chart { width: 100%; height: 64px; display: block; margin-top: 6px; }
+.acct-flex { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.acct-flex .donut { width: 92px; height: 92px; flex: 0 0 auto; }
+
+/* ══════════ F2 REBUILD: search + pagination ══════════ */
+.agents-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+#agents-search { flex: 1; min-width: 0; background: var(--bg2); border: 1px solid var(--border); color: var(--text); font: inherit; font-size: 11px; padding: 7px 10px; }
+#agents-search:focus { outline: none; border-color: var(--amber); }
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.pager .chip[disabled] { opacity: 0.35; cursor: default; }
+
+/* ══════════ ABOUT: powered-by row ══════════ */
+.powered-title { margin-top: 16px; }
+.powered-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.powered-logo { border: 1px solid var(--border-hi); padding: 7px 12px; font-size: 10px; letter-spacing: 0.14em; color: var(--text); text-decoration: none; }
+.powered-logo:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ══════════ FOOTER: snapshot-rendered vault links ══════════ */
+.foot-vaults { display: inline-flex; gap: 18px; flex-wrap: wrap; }
