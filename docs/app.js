@@ -41,7 +41,7 @@ const KNOWN_TX = {
   "5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N":
     { label: "TREASURY SPCX ACQUISITION · $12 → 0.077702 SPCX", type: "acq" },
   "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ":
-    { label: "AGENT-1 ALLOCATION · $5 USDC → 0.095208 SPCX", type: "alloc" },
+    { label: "AGENT-1 ALLOCATION · $5 USDC → 0.032377 SPCX", type: "alloc" },
 };
 // USD volume attributed to known swap transactions (verified session records).
 const TX_USD_VOLUME = {
@@ -305,6 +305,7 @@ function renderOverview(ctx) {
       <div class="row"><span>TREASURY</span><span class="num">${fmtTok(tUsdc, 2)} USDC · ${fmtTok(tSpcx)} SPCX</span></div>
       <div class="row"><span>AGENT-1</span><span class="num">${fmtTok(a1Spcx)} SPCX · ${fmtUsd(vaultUsd(a1, ctx.spcxImplied))}</span></div>
       <div class="row"><span>POLICY</span><span class="num">70/30 · +10% match · −2% fee</span></div>
+      <div class="row"><span class="dim">PRICES</span><span class="num dim">from broker quotes</span></div>
       <div class="row"><span class="dim">ex SOL (rent/fees)</span><span class="num dim">${fmtTok(tot.sol, 4)} SOL</span></div>
     </div>`;
 
@@ -489,6 +490,42 @@ function renderAgents(ctx) {
 
 const FEED_ICONS = { acq: "◈", alloc: "⇄", payout: "$", vest: "◐", match: "+", bounty: "◎" };
 
+/* ── wire filters + grouping state ── */
+
+const FEED_FILTERS = [
+  { id: "all",     label: "ALL" },
+  { id: "swaps",   label: "SWAPS",   types: ["acq", "alloc"] },
+  { id: "payouts", label: "PAYOUTS", types: ["payout"] },
+  { id: "vesting", label: "VESTING", types: ["vest"] },
+  { id: "matches", label: "MATCHES", types: ["match"] },
+  { id: "bounties",label: "BOUNTIES",types: ["bounty"] },
+];
+let feedFilter = "all";
+let feedCtx = null;
+
+// Group key for a signature: bounty lifecycles, swaps, or ungrouped.
+function groupForSig(sig, ctx) {
+  for (const b of ctx.bounties) {
+    if (b.payoutTx === sig) return "g-" + b.id;
+  }
+  for (const s of ctx.vesting) {
+    const key = String(s.id ?? "").replace(/^vest-/, "");
+    if (s.fundingTx === sig || s.matchTx === sig) return "g-" + key;
+  }
+  const info = KNOWN_TX[sig];
+  if (info && (info.type === "acq" || info.type === "alloc")) return "g-swaps";
+  return null;
+}
+
+function groupTitle(key, ctx) {
+  if (key === "g-swaps") return "TREASURY + AGENT SWAPS";
+  if (key === "g-vesting") return "VESTING STATUS · LIVE";
+  const id = String(key).replace(/^g-/, "");
+  const b = ctx.bounties.find((x) => x.id === id);
+  if (b) return `${b.id.toUpperCase()} LIFECYCLE · ${esc(b.title)}`;
+  return id.toUpperCase();
+}
+
 function feedDescribe(sig, ctx) {
   const info = txLabelFor(sig, ctx);
   if (info.type === "acq") return "TREASURY ACQUIRED 0.077702 SPCX FOR $12 USDC VIA JUPITER";
@@ -507,7 +544,16 @@ function feedDescribe(sig, ctx) {
   return info.label;
 }
 
+function feedItemHtml(e) {
+  return `<div class="feed-item">
+    <span class="feed-ts">${utc(e.ts)}${e.live ? " ·" : ""}</span>
+    <span class="feed-type ${e.type}">${FEED_ICONS[e.type] ?? ""} ${e.type.toUpperCase()}</span>
+    <span class="feed-body">${e.body}${e.sig ? `<span class="sig">${txLink(e.sig)}</span>` : ""}</span>
+  </div>`;
+}
+
 function renderFeed(ctx) {
+  feedCtx = ctx;
   const now = ctx.ts;
   const events = [];
 
@@ -520,6 +566,7 @@ function renderFeed(ctx) {
       type: info.type,
       body: feedDescribe(s.signature, ctx),
       sig: s.signature,
+      group: groupForSig(s.signature, ctx),
     });
   }
 
@@ -530,6 +577,7 @@ function renderFeed(ctx) {
       type: "bounty",
       body: `BOUNTY POSTED · ${b.id.toUpperCase()} — ${esc(b.title)} (${fmtUsd(bountyUsd(b))})`,
       sig: null,
+      group: "g-" + b.id,
     });
   }
 
@@ -542,21 +590,55 @@ function renderFeed(ctx) {
     const txt = now < cliffTs
       ? `${s.id.toUpperCase()} · DAY ${day}/${s.durationDays} · <span class="feed-now">IN CLIFF</span> — first release in ${((cliffTs - now) / 86400).toFixed(1)}d`
       : `${s.id.toUpperCase()} · DAY ${day}/${s.durationDays} · ${fmtTok(total * frac)} / ${fmtTok(total)} SPCX VESTED (${fmtPct(frac)})`;
-    events.push({ ts: now, type: "vest", body: txt, sig: null, live: true });
+    events.push({ ts: now, type: "vest", body: txt, sig: null, live: true, group: "g-vesting" });
   }
 
   events.sort((a, b) => b.ts - a.ts);
-  const list = events.slice(0, 18);
-  $("feed-meta").textContent = `${events.length} events · newest first`;
 
+  // apply the active type filter
+  const f = FEED_FILTERS.find((x) => x.id === feedFilter) ?? FEED_FILTERS[0];
+  const shown = f.types ? events.filter((e) => f.types.includes(e.type)) : events;
+  const list = shown.slice(0, 20);
+
+  // collect groups, preserving newest-first order
+  const groups = new Map();
+  for (const e of list) {
+    if (!e.group) continue;
+    if (!groups.has(e.group)) groups.set(e.group, []);
+    groups.get(e.group).push(e);
+  }
+  const expand = f.id !== "all"; // a filter is on: show what's inside
+  const seen = new Set();
+  let html = "";
+  for (const e of list) {
+    if (e.group) {
+      if (seen.has(e.group)) continue;
+      seen.add(e.group);
+      const evs = groups.get(e.group);
+      const open = expand ? " open" : "";
+      html += `<div class="feed-group${open}" data-group="${esc(e.group)}">
+        <div class="group-head" role="button" tabindex="0" aria-expanded="${expand}">
+          <span class="chev">▸</span>
+          <span class="group-title">${groupTitle(e.group, ctx)}</span>
+          <span class="group-count">${evs.length} event${evs.length === 1 ? "" : "s"}</span>
+          <span class="group-ts">${utc(evs[0].ts)}</span>
+        </div>
+        <div class="group-body">${evs.map(feedItemHtml).join("")}</div>
+      </div>`;
+    } else {
+      html += feedItemHtml(e);
+    }
+  }
+
+  const chips = FEED_FILTERS.map((x) =>
+    `<button class="chip${x.id === feedFilter ? " active" : ""}" data-feed-filter="${x.id}">${x.label}</button>`).join("");
+
+  $("feed-meta").textContent = f.id === "all"
+    ? `${events.length} events · newest first`
+    : `${list.length} of ${events.length} events · ${f.label}`;
   $("feed-body").innerHTML = list.length
-    ? `<div class="feed">${list.map((e) => `
-        <div class="feed-item">
-          <span class="feed-ts">${utc(e.ts)}${e.live ? " ·" : ""}</span>
-          <span class="feed-type ${e.type}">${FEED_ICONS[e.type] ?? ""} ${e.type.toUpperCase()}</span>
-          <span class="feed-body">${e.body}${e.sig ? `<span class="sig">${txLink(e.sig)}</span>` : ""}</span>
-        </div>`).join("")}</div>`
-    : `<p class="loading">no activity yet.</p>`;
+    ? `<div class="feed-filters" role="group" aria-label="filter activity">${chips}</div><div class="feed">${html}</div>`
+    : `<div class="feed-filters" role="group" aria-label="filter activity">${chips}</div><p class="loading">no activity for this filter.</p>`;
 }
 
 /* ── F4 · bounty board ── */
@@ -643,6 +725,21 @@ document.addEventListener("click", (e) => {
     }
     return;
   }
+  // feed filter chips
+  const chip = e.target.closest("[data-feed-filter]");
+  if (chip) {
+    feedFilter = chip.getAttribute("data-feed-filter");
+    if (feedCtx) renderFeed(feedCtx);
+    return;
+  }
+  // collapsible feed groups
+  const ghead = e.target.closest(".group-head");
+  if (ghead) {
+    const g = ghead.closest(".feed-group");
+    const open = g.classList.toggle("open");
+    ghead.setAttribute("aria-expanded", open ? "true" : "false");
+    return;
+  }
   // collapsible agent cards
   const head = e.target.closest(".agent-head");
   if (head) {
@@ -652,9 +749,9 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// keyboard support for collapsible cards
+// keyboard support for collapsible cards and feed groups
 document.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("agent-head")) {
+  if ((e.key === "Enter" || e.key === " ") && (e.target.classList?.contains("agent-head") || e.target.classList?.contains("group-head"))) {
     e.preventDefault();
     e.target.click();
   }

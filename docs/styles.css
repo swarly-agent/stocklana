@@ -529,6 +529,28 @@ footer {
 .feed-body .sig { margin-left: 6px; font-size: 10px; }
 .feed-now { color: var(--amber); }
 
+/* ── wire filters + event groups ── */
+.feed-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  padding: 4px 10px; border: 1px solid var(--border-hi);
+  background: transparent; color: var(--muted); cursor: pointer; border-radius: 3px;
+}
+.chip:hover { color: var(--text); border-color: var(--muted); }
+.chip.active { color: #000; background: var(--amber); border-color: var(--amber); font-weight: 700; }
+.feed-group { border: 1px solid var(--border); border-radius: 4px; margin-bottom: 8px; background: var(--bg2); }
+.group-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; cursor: pointer; user-select: none;
+}
+.group-head .chev { color: var(--muted); font-size: 10px; transition: transform 0.15s; }
+.feed-group.open .group-head .chev { transform: rotate(90deg); }
+.group-title { font-size: 10px; letter-spacing: 0.12em; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-count { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.group-ts { font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.group-body { display: none; border-top: 1px solid var(--border); padding: 4px 10px 8px; }
+.feed-group.open .group-body { display: block; }
+
 /* ── bounty board sections ── */
 .board-sec { margin-bottom: 16px; }
 .board-sec:last-child { margin-bottom: 0; }
