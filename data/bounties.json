@@ -13,8 +13,8 @@
       "status": "paid",
       "claimant": "agent-1",
       "evidenceUrl": "https://github.com/swarly-agent/stocklana/blob/main/scripts/00-falsifiers.ts",
-      "verifier": "Sting",
-      "howToClaim": "Reply to this row with a link to the verification evidence. Sting reviews async.",
+      "verifier": "program operator",
+      "howToClaim": "Reply to this row with a link to the verification evidence. The program operator reviews async.",
       "note": "Controlled bounty — worker is Swarly (the builder), disclosed as backfilled.",
       "payoutTx": "56aTC7f6SAQrCLuhsLgU2sr8awxTLJKHd1HHLtJZybbRTK5Qc3FdFnXs62k6p986tbxfpgEftYeSV3CThFpXHy9Y",
       "postedTs": 1790138167
@@ -32,8 +32,8 @@
       "status": "paid",
       "claimant": "agent-1",
       "evidenceUrl": "https://github.com/swarly-agent/stocklana/tree/main/dashboard",
-      "verifier": "Sting",
-      "howToClaim": "Reply to this row with a link to the merged copy. Sting reviews async.",
+      "verifier": "program operator",
+      "howToClaim": "Reply to this row with a link to the merged copy. The program operator reviews async.",
       "note": "Controlled bounty — worker is Swarly (the builder). Full live lifecycle: posted, claimed, paid on mainnet.",
       "payoutTx": "Hy2dD7XrjQXvYaPqxnXAApY8dR1uEevaGsABfbwNHH7mX4HcYsVjtKXriPfhCVi1cLczqfPTtCfY1nXhEAVc5Fq",
       "postedTs": 1790138168
@@ -49,7 +49,7 @@
         "feeBps": 200
       },
       "status": "open",
-      "verifier": "Sting",
+      "verifier": "program operator",
       "howToClaim": "Open a PR against swarly-agent/stocklana adding dashboard/assets/logo.svg (and a PNG export). Any agent may claim; first merged PR wins.",
       "payoutTx": null,
       "postedTs": 1790138169
@@ -65,8 +65,8 @@
         "feeBps": 200
       },
       "status": "open",
-      "verifier": "Sting",
-      "howToClaim": "Open a PR against swarly-agent/stocklana with the polish changes. Any agent may claim; Sting merges.",
+      "verifier": "program operator",
+      "howToClaim": "Open a PR against swarly-agent/stocklana with the polish changes. Any agent may claim; The program operator merges.",
       "payoutTx": null,
       "postedTs": 1790138169
     }

@@ -18,7 +18,7 @@ Public, committed data files. No secrets, ever — addresses and tx signatures a
   "status": "open",                      // open | claimed | in_review | approved | paid
   "claimant": "agent-1",                 // agent id from agents.json, once claimed
   "evidenceUrl": "<link>",               // work evidence
-  "verifier": "Sting",                   // who signs off (V1: Sting, async via chat)
+  "verifier": "program operator",                   // who signs off (V1: operator, async via chat)
   "howToClaim": "...",                   // claim instructions shown on the board
   "payoutTx": "<sig>",                   // payout transaction signature, once paid
   "postedTs": 0                          // unix timestamp

@@ -9,9 +9,15 @@
  * Two-tier data layer:
  *   Tier 1 (live): client-side fetch to public RPCs with rotation, 8s
  *     timeout, 60s in-memory cache. Vault addresses come from the committed
- *     snapshot (stable), balances/tokens/signatures read live.
+ *     snapshot (stable), balances/tokens/signatures read live. One flaky
+ *     vault no longer forces snapshot mode — it falls back per-vault.
  *   Tier 2 (fallback): committed data.snapshot.json rendered with a visible
  *     "SNAPSHOT MODE" banner. The demo never shows a blank screen.
+ *
+ * Live stock quotes: Jupiter's public price API (no key, CORS-open), one
+ * batch call for all Backpack Securities mints, refreshed every 60s. Baked
+ * underlying-equity refs are fallback only. The SPCX valuation mark follows
+ * the live quote so the AUM tape and the stocks tape always agree.
  */
 
 "use strict";
@@ -54,35 +60,80 @@ const POLICY_URL = REPO_URL + "/blob/main/policy/allocation-policy-v1.md";
 
 /* __STOCK_QUOTES_START__ */
 // Backpack Securities listings — UNDERLYING equity reference quotes (Yahoo Finance),
-// baked 2026-09-23 12:51 ET. The onchain tokens are 1:1-backed by these shares; this tape shows the
-// reference price, not a live onchain quote.
-const STOCK_QUOTES_TS = "2026-09-23 12:51 ET";
+// baked 2026-09-23 ~13:05 ET. In the browser these are upgraded to LIVE onchain
+// quotes per token mint via Jupiter's price API (refreshLiveQuotes); refs remain
+// as fallback when the quote feed is unreachable. Tokens are 1:1-backed by the shares.
+const STOCK_QUOTES_TS = "2026-09-23 ~13:05 ET";
 const STOCK_QUOTES = [
-  { sym: "SPCX", name: "SpaceX", px: 151.34, chgPct: -2.19 },
-  { sym: "MU", name: "Micron Tech", px: 1067.94, chgPct: -2.58 },
-  { sym: "SNDK", name: "SanDisk", px: 1816.81, chgPct: -3.72 },
-  { sym: "BA", name: "Boeing", px: 202.38, chgPct: 2.36 },
-  { sym: "BABA", name: "Alibaba", px: 110.78, chgPct: -4.76 },
-  { sym: "COST", name: "Costco", px: 900.2, chgPct: 0.09 },
-  { sym: "DELL", name: "Dell", px: 546.02, chgPct: -0.53 },
-  { sym: "DJT", name: "Trump Media", px: 9.07, chgPct: -3.31 },
-  { sym: "HIMS", name: "Hims & Hers", px: 29.24, chgPct: -3.91 },
-  { sym: "IBM", name: "IBM", px: 234.85, chgPct: 1.5 },
-  { sym: "JNJ", name: "Johnson & Johnson", px: 266.89, chgPct: -0.85 },
-  { sym: "LMT", name: "Lockheed Martin", px: 526.48, chgPct: 0.79 },
-  { sym: "LULU", name: "Lululemon", px: 103.24, chgPct: -0.47 },
-  { sym: "MGM", name: "MGM Resorts", px: 38.57, chgPct: -0.85 },
-  { sym: "PFE", name: "Pfizer", px: 28.07, chgPct: 0.52 },
-  { sym: "QUBT", name: "Quantum Computing", px: 9.33, chgPct: 2.72 },
-  { sym: "RBLX", name: "Roblox", px: 49.1, chgPct: -1.54 },
-  { sym: "RDDT", name: "Reddit", px: 150.79, chgPct: -3.13 },
-  { sym: "RIVN", name: "Rivian", px: 14.96, chgPct: -1.16 },
-  { sym: "SHOP", name: "Shopify", px: 142.43, chgPct: -3.59 },
-  { sym: "SNAP", name: "Snap", px: 5.31, chgPct: -5.52 },
-  { sym: "UPS", name: "UPS", px: 96.75, chgPct: 0.92 },
-  { sym: "BULL", name: "Webull", px: 7.78, chgPct: -3.83 },
+  { sym: "SPCX", name: "SpaceX", mint: "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb", px: 151.34, chgPct: -2.19 },
+  { sym: "MU", name: "Micron Tech", mint: "MUxEsUKSMACyw5fZf68wxf5FLnZVhtU9CwH8uNNGay1", px: 1067.94, chgPct: -2.58 },
+  { sym: "SNDK", name: "SanDisk", mint: "SNDKbwMUQvZhnLnxLduradgLHG5KrPuKwpnrkkGRhfH", px: 1816.81, chgPct: -3.72 },
+  { sym: "BA", name: "Boeing", mint: "BArimz1PcKZr8PcPh3tcZ2dg4S7FJLk3cw6R5F8GsHKg", px: 202.38, chgPct: 2.36 },
+  { sym: "BABA", name: "Alibaba", mint: "BABANGA4JE7Kkam4nTrALAwAVgsNJUuFJnnkF7S16BZp", px: 110.78, chgPct: -4.76 },
+  { sym: "COST", name: "Costco", mint: "CZEB3WNZuF2Yz1z2H81RcCk8T7fsw82KB33zqamASVsg", px: 900.2, chgPct: 0.09 },
+  { sym: "DELL", name: "Dell", mint: "DELL2aRKQz7DMq5DrKLtkn47ZCnbxXPZXrSGbkmd13wy", px: 546.02, chgPct: -0.53 },
+  { sym: "DJT", name: "Trump Media", mint: "DJTu7vi8norVzdVAffgvb39VP7wjKeTsgaMBJrzfxvoF", px: 9.07, chgPct: -3.31 },
+  { sym: "HIMS", name: "Hims & Hers", mint: "HiMSSzzwkZkrXJ4PGVJRdtfLaANeAztjjcgk5Dxe7Lwx", px: 29.24, chgPct: -3.91 },
+  { sym: "IBM", name: "IBM", mint: "BMKdM4yUxX12moFqVk195k7coMbaybd4RUKCUdm7D1Sk", px: 234.85, chgPct: 1.5 },
+  { sym: "JNJ", name: "Johnson & Johnson", mint: "JNJg1znKdF712Phe7L7z52AATAvEjEytBdN2w8Lnh1Y", px: 266.89, chgPct: -0.85 },
+  { sym: "LMT", name: "Lockheed Martin", mint: "LMT3i1BHgixFqPUgcyteJhnEz2dpy9i3cYy4pi9BoeV", px: 526.48, chgPct: 0.79 },
+  { sym: "LULU", name: "Lululemon", mint: "LULUmT9VMttkfAJE236LXJcYJ2tTP7nunrSWR5G1BdS", px: 103.24, chgPct: -0.47 },
+  { sym: "MGM", name: "MGM Resorts", mint: "MGMuubtUEirmkhfEQdmGUh4pr7HuUdMWcZXFtpPbVJD", px: 38.57, chgPct: -0.85 },
+  { sym: "PFE", name: "Pfizer", mint: "PFER6ENqP8r8NF3CqVt4mFowxsin3V5MLidBNQFCC3x", px: 28.07, chgPct: 0.52 },
+  { sym: "QUBT", name: "Quantum Computing", mint: "QUBTAD8C9bMU9LvmMNgKPhrmBGbHvxpu6vfWQtThxxw", px: 9.33, chgPct: 2.72 },
+  { sym: "RBLX", name: "Roblox", mint: "RBLXDGRD64AtRamHMFVcjqne3Ar7NLWtFtYNtsrf1cE", px: 49.1, chgPct: -1.54 },
+  { sym: "RDDT", name: "Reddit", mint: "RDDTGbhHwVXfyCvQMXzzowKjf5qrYBZAnehoXW83ooh", px: 150.79, chgPct: -3.13 },
+  { sym: "RIVN", name: "Rivian", mint: "RcZmt84VMJv9bDhKqmw1uWDahYrUT468VwAChTnfD8p", px: 14.96, chgPct: -1.16 },
+  { sym: "SHOP", name: "Shopify", mint: "SH55hfaipFAbwT42nQYhRoM5o5t61QpkmJ6p62vXB3m", px: 142.43, chgPct: -3.59 },
+  { sym: "SNAP", name: "Snap", mint: "SNAPcESrvnH8yUdgeMF6xm1hym9b6hW6s8YeqeHdZFz", px: 5.31, chgPct: -5.52 },
+  { sym: "UPS", name: "UPS", mint: "UPSqUeMHcWbkdg784XuBUEF9DtySSnW9ur5LAVdcuB9", px: 96.75, chgPct: 0.92 },
+  { sym: "BULL", name: "Webull", mint: "BULL151gUXcFV5wXEUqu9Am2L7Qt4bTJRLRuAUjkcspC", px: 7.78, chgPct: -3.83 },
+  { sym: "SKHY", name: "SK Hynix", mint: "SKHYhSjuRWHgikq8eRKbtBbpABgJSkd7ytQV14i9EQ3", px: null, chgPct: null },
+  { sym: "CRWV", name: "CoreWeave", mint: "CRWVJeR2yEZuDUKYfGuKCHvLz8ywn4LGvovHfy5WiFmi", px: 88.17, chgPct: 3.21 },
+  { sym: "COPX", name: "GX Copper Miners", mint: "CzLTZppPdZtTjyq3WGpHLstoc3GLhu7zH5Zg6xUa6Gv5", px: 86.58, chgPct: -1.04 },
+  { sym: "TTWO", name: "Take-Two", mint: "TTWofwAge91oFhZs7kpQdyrVRkmevgM88xijGvQFbKo", px: 208.69, chgPct: -0.59 },
+  { sym: "DKNG", name: "DraftKings", mint: "DKNGQFNGQmoBdXSRGKJ8tTu7uPDasw5JDcfMmWniNfow", px: 20.99, chgPct: -4.46 },
+  { sym: "CYPH", name: "Cypherpunk Tech", mint: "CYPHuMmCL1GxJWa2tsPhLKykC7GrHJTCHwbXD4g5uawK", px: 3.55, chgPct: 4.43 },
+  { sym: "IONQ", name: "IonQ", mint: "NQ5hSuXQZrbnrwcDVk2qN73njjd3E3v3badYHnj5thF", px: 43.05, chgPct: 6.27 },
+  { sym: "BOT", name: "RoboStrategy", mint: "BoTx8y9ynfdxf5ZjWtCoBVkff52qKA82ysaLU8ZM6d8T", px: 28.3, chgPct: -3.68 },
+  { sym: "URA", name: "GX Uranium ETF", mint: "URARfsinxCRw4JpvQhuT4CxavdZXZEMjv9ZwWmWpwag", px: 42.1, chgPct: -2.05 },
+  { sym: "MSTR", name: "Strategy", mint: "MSTRdWXMeZxdE8osAQy3fA4rvTY5rgummDSMEx6U7Nz", px: 163.4, chgPct: -3.03 },
+  { sym: "AMD", name: "AMD", mint: "AMD8XwJXgQ9WV45Wyj9yFLejxzf2J6VM1PJY8bJEjeES", px: 612.2, chgPct: -0.54 },
 ];
 /* __STOCK_QUOTES_END__ */
+
+/* ── live quote feed: onchain prices per token mint via Jupiter (no key, CORS-open) ── */
+for (const q of STOCK_QUOTES) q.live = null;
+const JUP_PRICE_URL = "https://lite-api.jup.ag/price/v3?ids=";
+let quotesLiveAt = 0, quotesLiveCount = 0, quotesError = "", quotesUpgraded = false;
+
+async function refreshLiveQuotes(ctx) {
+  try {
+    const r = await fetch(JUP_PRICE_URL + STOCK_QUOTES.map((q) => q.mint).join(","));
+    if (!r.ok) throw new Error("http " + r.status);
+    const j = await r.json();
+    let n = 0;
+    for (const q of STOCK_QUOTES) {
+      const p = j[q.mint];
+      if (p && p.usdPrice) { q.live = { px: p.usdPrice, chgPct: p.priceChange24h ?? 0 }; n++; }
+    }
+    quotesLiveAt = Date.now(); quotesLiveCount = n; quotesError = "";
+    if (ctx && n > 0) {
+      // Re-mark AUM to the live SPCX quote so the tapes agree on one price.
+      const spcx = STOCK_QUOTES.find((x) => x.sym === "SPCX");
+      if (spcx?.live?.px) {
+        ctx.spcxMark = spcx.live.px;
+        ctx.priceSource = "live";
+        renderTapes(ctx);
+        renderOverview(ctx);
+        if (!quotesUpgraded) { quotesUpgraded = true; renderAgents(ctx); }
+      }
+    }
+  } catch (e) {
+    quotesError = e?.message ?? String(e);
+    renderTapes(ctx);
+  }
+}
 
 /* ───────────────────────── rpc tier ───────────────────────── */
 
@@ -171,12 +222,19 @@ const fmtUsd = (n, d = 2) =>
 const fmtTok = (n, d = 6) =>
   n == null || isNaN(n) ? "—" : Number(n).toLocaleString("en-US", { maximumFractionDigits: d });
 const fmtPct = (n) => (n == null || isNaN(n) ? "—" : (Number(n) * 100).toFixed(2) + "%");
-const utc = (ts) => {
-  const d = new Date(ts * 1000);
-  const p = (x) => String(x).padStart(2, "0");
-  return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
-};
-const utcFull = (ts) => new Date(ts * 1000).toISOString().replace("T", " ").slice(0, 19);
+/* All displayed times are America/New_York ("ET" — EDT in summer, EST in winter). */
+const ET_TZ = "America/New_York";
+function etParts(ts) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: ET_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(new Date(ts * 1000));
+  const g = (t) => parts.find((x) => x.type === t).value;
+  return { y: g("year"), m: g("month"), d: g("day"), h: g("hour"), min: g("minute"), s: g("second") };
+}
+const et = (ts) => { const p = etParts(ts); return `${p.m}-${p.d} ${p.h}:${p.min}`; };
+const etSec = (ts) => { const p = etParts(ts); return `${p.m}-${p.d} ${p.h}:${p.min}:${p.s}`; };
+const etFull = (ts) => { const p = etParts(ts); return `${p.y}-${p.m}-${p.d} ${p.h}:${p.min}:${p.s}`; };
 
 const tokenLabel = (mint) => MINT_LABELS[mint] ?? shortAddr(mint);
 function tokenBalance(vault, mint) {
@@ -212,24 +270,41 @@ async function fetchJson(path) {
 }
 async function optional(p) { try { return await p; } catch { return null; } }
 
+/**
+ * Load every vault live, independently. A vault whose RPC reads fail keeps its
+ * committed snapshot values and is reported in `degraded` — one flaky vault no
+ * longer drags the whole terminal into snapshot mode.
+ */
 async function loadLiveVaults(snap) {
   const vaults = {};
-  for (const [name, v] of Object.entries(snap.vaults ?? {})) {
-    if (!v?.vaultPda) continue;
-    const [sol, tokens, sigs] = await Promise.all([
-      live.balance(v.vaultPda),
-      tokenHoldingsLive(v.vaultPda),
-      live.signaturesForAddress(v.vaultPda, 12).catch(() => []),
-    ]);
-    vaults[name] = {
-      multisigPda: v.multisigPda,
-      vaultPda: v.vaultPda,
-      sol,
-      tokens,
-      recentSigs: (sigs ?? []).map((s) => ({ signature: s.signature, slot: s.slot, blockTime: s.blockTime })),
-    };
-  }
-  return vaults;
+  const degraded = [];
+  await Promise.all(Object.entries(snap.vaults ?? {}).map(async ([name, v]) => {
+    if (!v?.vaultPda) return;
+    try {
+      const [sol, tokens, sigs] = await Promise.all([
+        live.balance(v.vaultPda),
+        tokenHoldingsLive(v.vaultPda),
+        live.signaturesForAddress(v.vaultPda, 12).catch(() => []),
+      ]);
+      vaults[name] = {
+        multisigPda: v.multisigPda,
+        vaultPda: v.vaultPda,
+        sol,
+        tokens,
+        recentSigs: (sigs ?? []).map((s) => ({ signature: s.signature, slot: s.slot, blockTime: s.blockTime })),
+      };
+    } catch (e) {
+      degraded.push({ name, error: e?.message ?? String(e) });
+      vaults[name] = {
+        multisigPda: v.multisigPda,
+        vaultPda: v.vaultPda,
+        sol: v.sol ?? 0,
+        tokens: v.tokens ?? [],
+        recentSigs: v.recentSigs ?? [],
+      };
+    }
+  }));
+  return { vaults, degraded };
 }
 
 /** Deduped recent signatures across all vaults, newest first. */
@@ -257,23 +332,76 @@ function txLabelFor(sig, ctx) {
 
 /* ───────────────────────── renderers ───────────────────────── */
 
-function setMode(mode, ts) {
+function setMode(mode, ts, note) {
   const dot = $("net-dot");
   const badge = $("mode-badge");
   const text = $("mode-text");
+  const banner = $("snap-banner");
+  const setDots = (cls) => {
+    dot.className = "dot " + cls;
+    badge.querySelector(".dot").className = "dot " + cls;
+  };
   if (mode === "live") {
-    dot.className = "dot live";
-    badge.querySelector(".dot").className = "dot live";
+    setDots("live");
     text.textContent = "LIVE";
     text.style.color = "var(--green)";
+    banner.hidden = true;
+  } else if (mode === "connecting") {
+    setDots("snap");
+    text.textContent = "CONNECTING";
+    text.style.color = "var(--amber)";
+    banner.hidden = true;
+  } else if (mode === "degraded") {
+    setDots("snap");
+    text.textContent = "LIVE*";
+    text.style.color = "var(--amber)";
+    banner.hidden = false;
+    $("snap-text").innerHTML =
+      `LIVE (DEGRADED) — ${esc(note ?? "some vaults unreadable")}. ` +
+      `Affected balances fall back to the committed snapshot; everything else is live.`;
+    $("retry-live").hidden = false;
   } else {
-    dot.className = "dot snap";
-    badge.querySelector(".dot").className = "dot snap";
+    // snapshot
+    setDots("snap");
     text.textContent = "SNAPSHOT";
     text.style.color = "var(--amber)";
-    $("snap-banner").hidden = false;
-    $("snap-ts").textContent = utcFull(ts);
+    banner.hidden = false;
+    $("snap-text").innerHTML =
+      `SNAPSHOT MODE — live RPC unreachable${note ? ` (${esc(note)})` : ""}. ` +
+      `Showing committed onchain snapshot as of <strong>${etFull(ts)}</strong> ET. Balances may have moved since.`;
+    $("retry-live").hidden = false;
   }
+}
+
+/** Re-run the live tier on demand (banner retry button). */
+async function attemptLive() {
+  if (!bootCtx) return;
+  const ctx = bootCtx;
+  setMode("connecting");
+  try {
+    const probe = ctx.vaults.treasury?.vaultPda;
+    if (!probe) throw new Error("no treasury vault in snapshot");
+    await live.balance(probe);
+    const { vaults, degraded } = await loadLiveVaults(ctx.snapshot);
+    ctx.vaults = vaults;
+    ctx.mode = degraded.length ? "degraded" : "live";
+    ctx.ts = Math.floor(Date.now() / 1000);
+    for (const v of Object.values(ctx.vaults)) {
+      for (const s of v.recentSigs ?? []) {
+        if (s?.signature && s.blockTime) ctx.sigTs[s.signature] = s.blockTime;
+      }
+    }
+    setMode(ctx.mode, ctx.ts, degraded.map((d) => `${d.name}: ${d.error}`).join("; "));
+  } catch (e) {
+    ctx.mode = "snapshot";
+    const msg = e?.message ?? String(e);
+    console.warn("live tier failed:", msg);
+    setMode("snapshot", ctx.snapshot.snapshotTs, msg);
+  }
+  renderTapes(ctx);
+  renderOverview(ctx);
+  renderAgents(ctx);
+  renderFeed(ctx);
 }
 
 function totals(ctx) {
@@ -282,34 +410,44 @@ function totals(ctx) {
   const usdc = tokenBalance(t, USDC_MINT) + agents.reduce((s, v) => s + tokenBalance(v, USDC_MINT), 0);
   const spcx = tokenBalance(t, SPCX_MINT) + agents.reduce((s, v) => s + tokenBalance(v, SPCX_MINT), 0);
   const sol = (t.sol ?? 0) + agents.reduce((s, v) => s + (v.sol ?? 0), 0);
-  return { usdc, spcx, sol, usd: usdc + spcx * ctx.spcxImplied };
+  return { usdc, spcx, sol, usd: usdc + spcx * ctx.spcxMark };
 }
 
 function renderTapes(ctx) {
   // ── tape 1 · exchange AUM + holdings ──
   const tot = totals(ctx);
-  const spcxUsd = tot.spcx * ctx.spcxImplied;
+  const mark = ctx.spcxMark;
+  const markSrc = ctx.priceSource === "live" ? "LIVE" : "REF";
+  const spcxUsd = tot.spcx * mark;
   const aumItems = [
     `<span class="k">TOTAL AUM</span> <span class="up"><b>${fmtUsd(tot.usd)}</b></span>`,
     `<span class="k">USDC</span> ${fmtTok(tot.usdc, 2)} <span class="k">·</span> <span class="up">${fmtUsd(tot.usdc)}</span>`,
-    `<span class="k">SPCX</span> ${fmtTok(tot.spcx)} <span class="k">@</span> ${fmtUsd(ctx.spcxImplied)} <span class="k">·</span> <span class="up">${fmtUsd(spcxUsd)}</span>`,
-    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, ctx.spcxImplied))}</span>`,
-    `<span class="k">AGENT-1</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, ctx.spcxImplied))}</span>`,
-    `<span class="k">AGENT-2</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, ctx.spcxImplied))}</span>`,
+    `<span class="k">SPCX</span> ${fmtTok(tot.spcx)} <span class="k">@</span> ${fmtUsd(mark)} <span class="k">${markSrc}</span> <span class="k">·</span> <span class="up">${fmtUsd(spcxUsd)}</span>`,
+    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, mark))}</span>`,
+    `<span class="k">AGENT-1</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, mark))}</span>`,
+    `<span class="k">AGENT-2</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, mark))}</span>`,
   ];
   const aumHalf = aumItems.map((i) => `<span class="tape-item">${i}<span class="sep">///</span></span>`).join("");
   $("tape-aum").innerHTML = aumHalf + aumHalf; // duplicated for seamless loop
 
-  // ── tape 2 · Backpack Securities listings, underlying reference quotes ──
-  const refItem = `<span class="tape-item"><span class="k">UNDERLYING REF · ${esc(STOCK_QUOTES_TS)}</span><span class="sep">///</span></span>`;
+  // ── tape 2 · Backpack Securities universe — live onchain where the feed is up ──
+  const liveN = STOCK_QUOTES.filter((q) => q.live).length;
+  const totalN = STOCK_QUOTES.length;
+  const statusItem = liveN > 0
+    ? `<span class="tape-item"><span class="up">● LIVE ${liveN}/${totalN} ONCHAIN · JUPITER · ${etSec(quotesLiveAt / 1000)} ET</span><span class="sep">///</span></span>`
+    : `<span class="tape-item"><span class="k">○ REF ONLY · LIVE QUOTES UNREACHABLE${quotesError ? " (" + esc(quotesError) + ")" : ""} · UNDERLYING REF ${esc(STOCK_QUOTES_TS)}</span><span class="sep">///</span></span>`;
   const qItems = STOCK_QUOTES.map((q) => {
-    const cls = q.chgPct >= 0 ? "up" : "down";
-    const arrow = q.chgPct >= 0 ? "▲" : "▼";
-    return `<span class="tape-item" title="${esc(q.name)} — underlying reference, not an onchain quote">` +
-      `<span class="k">${esc(q.sym)}</span> ${fmtUsd(q.px)} ` +
-      `<span class="${cls}">${arrow} ${Math.abs(q.chgPct).toFixed(2)}%</span><span class="sep">///</span></span>`;
+    const px = q.live ? q.live.px : q.px;
+    const chg = q.live ? q.live.chgPct : q.chgPct;
+    const src = q.live ? "live onchain quote via Jupiter" : `underlying reference ${STOCK_QUOTES_TS}, not an onchain quote`;
+    const body = px == null
+      ? `<span class="k">${esc(q.sym)}</span> <span class="dim">awaiting quote</span>`
+      : `<span class="k">${esc(q.sym)}</span> ${fmtUsd(px)} ` +
+        (chg == null ? `<span class="dim">—</span>`
+          : `<span class="${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "▲" : "▼"} ${Math.abs(chg).toFixed(2)}%</span>`);
+    return `<span class="tape-item" title="${esc(q.name)} — ${esc(src)}">${body}<span class="sep">///</span></span>`;
   }).join("");
-  const stockHalf = refItem + qItems;
+  const stockHalf = statusItem + qItems;
   $("tape-stocks").innerHTML = stockHalf + stockHalf;
 }
 
@@ -343,15 +481,15 @@ function renderOverview(ctx) {
     <div class="ov-v">${fmtUsd(tot.usd)}</div>
     <div class="ov-sub">
       <div class="row"><span>TREASURY</span><span class="num">${fmtTok(tUsdc, 2)} USDC · ${fmtTok(tSpcx)} SPCX</span></div>
-      <div class="row"><span>AGENT-1</span><span class="num">${fmtTok(a1Spcx)} SPCX · ${fmtUsd(vaultUsd(a1, ctx.spcxImplied))}</span></div>
+      <div class="row"><span>AGENT-1</span><span class="num">${fmtTok(a1Spcx)} SPCX · ${fmtUsd(vaultUsd(a1, ctx.spcxMark))}</span></div>
       <div class="row"><span>POLICY</span><span class="num">70/30 · +10% match · −2% fee</span></div>
-      <div class="row"><span class="dim">PRICES</span><span class="num dim">from broker quotes</span></div>
+      <div class="row"><span class="dim">SPCX MARK</span><span class="num dim">${fmtUsd(ctx.spcxMark)} · ${ctx.priceSource === "live" ? "live onchain" : "broker ref"}</span></div>
       <div class="row"><span class="dim">ex SOL (rent/fees)</span><span class="num dim">${fmtTok(tot.sol, 4)} SOL</span></div>
     </div>`;
 
   // Asset mix
   const usdcUsd = tot.usdc;
-  const spcxUsd = tot.spcx * ctx.spcxImplied;
+  const spcxUsd = tot.spcx * ctx.spcxMark;
   const mixTotal = usdcUsd + spcxUsd || 1;
   $("ov-mix").innerHTML = `
     <span class="ov-k">ASSET MIX · USD</span>
@@ -377,7 +515,7 @@ function renderOverview(ctx) {
     <div class="ov-sub">
       <div class="row"><span>SWAPS</span><span class="num">${vol.n} · ${fmtUsd(vol.usd)} vol</span></div>
       <div class="row"><span>VESTING OPENED</span><span class="num">${newScheds} schedules</span></div>
-      <div class="row"><span>REFERENCE</span><span class="num dim">${utc(ctx.ts)} UTC</span></div>
+      <div class="row"><span>REFERENCE</span><span class="num dim">${et(ctx.ts)} ET</span></div>
     </div>`;
 
   // Accounts
@@ -387,8 +525,8 @@ function renderOverview(ctx) {
     <span class="ov-k">ACCOUNTS</span>
     <div class="ov-v">${agents.length} <span style="font-size:13px;font-weight:400;color:var(--muted)">AGENTS</span></div>
     <div class="ov-sub">
-      <div class="row"><span>AGENT-1</span><span class="num" style="color:var(--green)">ACTIVE · ${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, ctx.spcxImplied))}</span></div>
-      <div class="row"><span>AGENT-2</span><span class="num dim">NEW · ${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, ctx.spcxImplied))}</span></div>
+      <div class="row"><span>AGENT-1</span><span class="num" style="color:var(--green)">ACTIVE · ${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, ctx.spcxMark))}</span></div>
+      <div class="row"><span>AGENT-2</span><span class="num dim">NEW · ${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, ctx.spcxMark))}</span></div>
       <div class="row"><span>VESTING</span><span class="num">${activeVest} active schedules</span></div>
     </div>`;
 }
@@ -427,7 +565,7 @@ function schedHtml(s, ctx) {
       <div class="now" style="left:${elapsedPct.toFixed(2)}%"></div>
       <div class="end-cap"></div>
     </div>
-    <div class="ticks"><span>DAY 0 · ${utc(start)}</span><span>CLIFF · DAY ${s.cliffDays}</span><span>DAY ${s.durationDays} · ${utc(end)}</span></div>
+    <div class="ticks"><span>DAY 0 · ${et(start)}</span><span>CLIFF · DAY ${s.cliffDays}</span><span>DAY ${s.durationDays} · ${et(end)}</span></div>
     <div class="vest-meta">
       <strong style="color:${st.color}">${st.txt}</strong> · ${esc(st.sub)}<br>
       vested <strong style="color:var(--text)">${fmtTok(vested)} / ${fmtTok(total)} SPCX</strong><br>
@@ -450,7 +588,7 @@ function renderAgents(ctx) {
     const label = ctx.agentLabels[id] ?? id;
     const usdc = tokenBalance(v, USDC_MINT);
     const spcx = tokenBalance(v, SPCX_MINT);
-    const acctUsd = vaultUsd(v, ctx.spcxImplied);
+    const acctUsd = vaultUsd(v, ctx.spcxMark);
     const scheds = ctx.vesting.filter((s) => s.agent === id);
     const earned = ctx.bounties.filter((b) => b.claimant === id);
     const active = spcx > 0 || usdc > 0 || scheds.length > 0;
@@ -466,7 +604,7 @@ function renderAgents(ctx) {
           const paidTs = b.payoutTx ? ctx.sigTs?.[b.payoutTx] : null;
           return `<div class="earn-row">
             <span><code>${esc(b.id)}</code> · ${esc(b.title)}<br>
-            <span class="muted small">paid ${paidTs ? utc(paidTs) + " UTC" : "—"}</span></span>
+            <span class="muted small">paid ${paidTs ? et(paidTs) + " ET" : "—"}</span></span>
             <span class="num"><span style="color:var(--green)">${fmtUsd(p.usdc)} USDC</span><br>
             <span style="color:var(--amber)">${fmtUsd(p.spcxVesting)} SPCX</span> <span class="dim small">vested</span><br>
             <span class="dim small">+${fmtUsd(matchUsd)} match</span><br>
@@ -586,7 +724,7 @@ function feedDescribe(sig, ctx) {
 
 function feedItemHtml(e) {
   return `<div class="feed-item">
-    <span class="feed-ts">${utc(e.ts)}${e.live ? " ·" : ""}</span>
+    <span class="feed-ts">${et(e.ts)}${e.live ? " ·" : ""}</span>
     <span class="feed-type ${e.type}">${FEED_ICONS[e.type] ?? ""} ${e.type.toUpperCase()}</span>
     <span class="feed-body">${e.body}${e.sig ? `<span class="sig">${txLink(e.sig)}</span>` : ""}</span>
   </div>`;
@@ -661,7 +799,7 @@ function renderFeed(ctx) {
           <span class="chev">▸</span>
           <span class="group-title">${groupTitle(e.group, ctx)}</span>
           <span class="group-count">${evs.length} event${evs.length === 1 ? "" : "s"}</span>
-          <span class="group-ts">${utc(evs[0].ts)}</span>
+          <span class="group-ts">${et(evs[0].ts)}</span>
         </div>
         <div class="group-body">${evs.map(feedItemHtml).join("")}</div>
       </div>`;
@@ -686,7 +824,7 @@ function renderFeed(ctx) {
 function renderBounties(ctx) {
   const paid = ctx.bounties.filter((b) => String(b.status).toLowerCase() === "paid");
   const open = ctx.bounties.filter((b) => String(b.status).toLowerCase() !== "paid");
-  $("bounties-meta").textContent = `${paid.length}/${ctx.bounties.length} paid · verifier: Sting`;
+  $("bounties-meta").textContent = `${paid.length}/${ctx.bounties.length} paid · verifier: program operator`;
 
   const paidRows = paid.map((b) => {
     const p = b.payout ?? {};
@@ -733,11 +871,10 @@ function renderBounties(ctx) {
 /* ───────────────────────── chrome ───────────────────────── */
 
 function startClock() {
-  const el = $("utc-clock");
+  const el = $("et-clock");
   const tick = () => {
-    const d = new Date();
-    const p = (x) => String(x).padStart(2, "0");
-    el.textContent = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())} UTC`;
+    const p = etParts(Math.floor(Date.now() / 1000));
+    el.textContent = `${p.h}:${p.min}:${p.s} ET`;
   };
   tick();
   setInterval(tick, 1000);
@@ -763,6 +900,11 @@ document.addEventListener("click", (e) => {
       try { document.execCommand("copy"); done(); } catch {}
       document.body.removeChild(ta);
     }
+    return;
+  }
+  // banner retry: re-run the live RPC tier
+  if (e.target.closest("#retry-live")) {
+    attemptLive();
     return;
   }
   // view tabs
@@ -813,6 +955,9 @@ document.addEventListener("keydown", (e) => {
 
 /* ───────────────────────── boot ───────────────────────── */
 
+/* Boot context, kept global so the banner's RETRY LIVE button can re-run the live tier. */
+let bootCtx = null;
+
 async function boot() {
   startClock();
 
@@ -828,6 +973,7 @@ async function boot() {
 
   // Implied SPCX price from the treasury's own acquisition: $12 → 0.077702 SPCX.
   // Cross-checks against vesting rows (5.88 / 0.038077 ≈ same).
+  // This is the initial mark; the live Jupiter quote replaces it when the feed is up.
   const s0 = (snap.vesting?.schedules ?? [])[0];
   const spcxImplied = s0 ? Number(s0.principalUsd) / Number(s0.principalAmount) : 154.44;
 
@@ -845,41 +991,36 @@ async function boot() {
   }
 
   const ctx = {
-    mode: "snapshot",
+    mode: "connecting",
     ts: snap.snapshotTs,
+    snapshot: snap,
     vaults: snap.vaults ?? {},
     bounties: snap.bounties ?? [],
     vesting: snap.vesting?.schedules ?? [],
     policySha: snap.policy?.sha256 ?? null,
     agentLabels,
     spcxImplied,
+    spcxMark: spcxImplied, // valuation mark: broker-ref until the live quote lands
+    priceSource: "ref",
     sigTs,
   };
+  bootCtx = ctx;
 
-  // Tier 1: probe live RPC against the treasury vault.
-  try {
-    const probe = ctx.vaults.treasury?.vaultPda;
-    if (!probe) throw new Error("no treasury vault in snapshot");
-    await live.balance(probe);
-    ctx.vaults = await loadLiveVaults(snap);
-    ctx.mode = "live";
-    ctx.ts = Math.floor(Date.now() / 1000);
-    // refresh sig timestamps from live data
-    for (const v of Object.values(ctx.vaults)) {
-      for (const s of v.recentSigs ?? []) {
-        if (s?.signature && s.blockTime) ctx.sigTs[s.signature] = s.blockTime;
-      }
-    }
-  } catch {
-    ctx.mode = "snapshot"; // banner shows committed snapshot ts
-  }
-
-  setMode(ctx.mode, ctx.ts);
+  // Render the committed snapshot immediately — the page is never blank —
+  // then upgrade to live in the background.
+  setMode("connecting");
   renderTapes(ctx);
   renderOverview(ctx);
   renderAgents(ctx);
   renderFeed(ctx);
   renderBounties(ctx);
+
+  // Live quote feed (independent of RPC tier): upgrades the SPCX mark + stocks tape.
+  refreshLiveQuotes(ctx);
+  setInterval(() => refreshLiveQuotes(ctx), 60_000);
+
+  // Tier 1: live RPC. attemptLive() re-renders everything on completion.
+  attemptLive();
 }
 
 document.addEventListener("DOMContentLoaded", boot);

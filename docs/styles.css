@@ -144,6 +144,19 @@ code {
   letter-spacing: 0.03em;
 }
 .warn-glyph { color: var(--amber); }
+.retry-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--amber-dim);
+  color: var(--amber);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 3px 10px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.retry-btn:hover { border-color: var(--amber); color: #ffd98a; }
 
 /* ══════════ GRID + PANELS ══════════ */
 .grid {
