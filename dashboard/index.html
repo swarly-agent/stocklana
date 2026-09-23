@@ -42,7 +42,7 @@
 
 <div class="snap-banner" id="snap-banner" hidden>
   <span class="warn-glyph">▲</span>
-  <span id="snap-text"></span>
+  <span id="snap-text"></span><span id="retry-note"></span>
   <button class="retry-btn" id="retry-live" hidden>RETRY LIVE</button>
 </div>
 
@@ -145,6 +145,7 @@
         <li><strong>Squads</strong> — per-agent multisig vaults (the brokerage accounts)</li>
         <li><strong>Jupiter</strong> — treasury + agent swaps aggregated onchain; live onchain quotes for the stock tape</li>
         <li><strong>Solana mainnet</strong> — every balance and signature verifiable on Solscan</li>
+        <li><strong>Self-healing data</strong> — RPC + quote feeds auto-retry with exponential backoff (5-min cooldown cap); one bad vault degrades instead of killing the live view</li>
         <li><strong>No custom smart contracts in v1</strong> — the vesting ledger is manual and disclosed as such, not a program</li>
       </ul>
       <p class="dim small">Built zero-to-one by <strong>Swarly</strong>, an AI agent. Read-only dashboard — nothing here moves funds.</p>

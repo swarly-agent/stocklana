@@ -21,10 +21,11 @@ function makeEl(id) {
   };
 }
 let domReadyCb = null;
+const docListeners = new Map();
 global.document = {
   getElementById: (id) => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); },
-  querySelectorAll: () => [],
-  addEventListener: (ev, cb) => { if (ev === "DOMContentLoaded") domReadyCb = cb; },
+  querySelectorAll: (sel) => (global.__openEls || []).filter((e) => e._sel === sel),
+  addEventListener: (ev, cb) => { if (ev === "DOMContentLoaded") domReadyCb = cb; docListeners.set(ev, cb); },
   createElement: () => ({ style: {}, appendChild: () => {}, select: () => {} }),
   body: { appendChild: () => {}, removeChild: () => {} },
 };
@@ -71,12 +72,14 @@ function fullJup() {
 
 // ---------- load app ----------
 const src = fs.readFileSync(path.join(REPO, "app.js"), "utf8") +
-  "\n;globalThis.__app = { STOCK_QUOTES, et, etFull, etSec, attemptLive, refreshLiveQuotes, " +
+  "\n;globalThis.__app = { STOCK_QUOTES, et, etFull, etSec, attemptLive, refreshLiveQuotes, renderFeed, " +
+  "rpcAuto, quoteAuto, rpcBackoffMs, quoteDelayMs, scheduleRpcRetry, scheduleQuoteRefresh, quoteLoop, " +
   "get bootCtx() { return bootCtx; }, " +
   "get quotesLiveCount() { return quotesLiveCount; }, " +
   "__clearCache: () => cache.clear() };";
 eval(src);
-const { STOCK_QUOTES, et, etFull, attemptLive, __clearCache } = globalThis.__app;
+const { STOCK_QUOTES, et, etFull, attemptLive, refreshLiveQuotes, renderFeed,
+  rpcAuto, quoteAuto, rpcBackoffMs, quoteDelayMs, __clearCache } = globalThis.__app;
 const quotesLiveCount = () => globalThis.__app.quotesLiveCount;
 const bootCtx = () => globalThis.__app.bootCtx;
 
@@ -90,6 +93,10 @@ const htmlHas = (id) => fs.readFileSync(path.join(REPO, "index.html"), "utf8").i
 async function scenario(name, setup) {
   els.clear();
   __clearCache();
+  for (const t of [rpcAuto.timer, rpcAuto.refreshTimer, quoteAuto.timer]) clearTimeout(t);
+  Object.assign(rpcAuto, { attempts: 0, timer: null, nextAt: 0, inflight: false, refreshTimer: null });
+  Object.assign(quoteAuto, { fails: 0, timer: null, nextAt: 0 });
+  global.__openEls = [];
   for (const q of STOCK_QUOTES) q.live = null;
   Object.assign(global, { __jupDown: false, __jupPartial: false });
   rpcMode = "ok";
@@ -102,7 +109,7 @@ async function scenario(name, setup) {
 
 (async () => {
   // 1. IDs referenced by JS exist in HTML
-  for (const id of ["tape-aum", "tape-stocks", "et-clock", "snap-banner", "snap-text", "retry-live",
+  for (const id of ["tape-aum", "tape-stocks", "et-clock", "snap-banner", "snap-text", "retry-note", "retry-live",
       "mode-badge", "mode-text", "net-dot", "ov-aum", "ov-mix", "ov-activity", "ov-accounts",
       "agents-body", "agents-meta", "feed-body", "feed-meta", "bounties-body", "bounties-meta"])
     ok(htmlHas(id), "html has #" + id);
@@ -177,6 +184,52 @@ async function scenario(name, setup) {
   await attemptLive();
   await new Promise((r) => setTimeout(r, 50));
   ok(bootCtx().mode === "live", "post-retry live, got " + bootCtx().mode);
+
+  // 10. Auto-retry backoff math
+  ok(quoteDelayMs(0) === 60000, "quote delay healthy 60s");
+  ok(quoteDelayMs(1) === 120000, "quote delay 120s after 1 fail");
+  ok(quoteDelayMs(2) === 240000, "quote delay 240s after 2 fails");
+  ok(quoteDelayMs(9) === 300000, "quote delay capped 300s");
+  const b1 = rpcBackoffMs(1), b2 = rpcBackoffMs(2), b6 = rpcBackoffMs(6), b99 = rpcBackoffMs(99);
+  ok(b1 >= 8000 && b1 <= 12000, "rpc backoff ~10s, got " + b1);
+  ok(b2 >= 16000 && b2 <= 24000, "rpc backoff ~20s, got " + b2);
+  ok(b6 >= 240000 && b6 <= 300000, "rpc backoff capped ~300s, got " + b6);
+  ok(b99 <= 300000, "rpc backoff never exceeds cap");
+
+  // 11. RPC down -> failure counted, retry scheduled with backoff
+  await scenario("auto-retry", () => { rpcMode = "down"; });
+  ok(bootCtx().mode === "snapshot", "auto-retry pre snapshot");
+  ok(rpcAuto.attempts >= 1, "attempts counted, got " + rpcAuto.attempts);
+  ok(rpcAuto.timer !== null, "retry timer scheduled");
+  ok(rpcAuto.nextAt > Date.now(), "retry scheduled in the future");
+
+  // 12. Banner RETRY LIVE click resets backoff and recovers
+  rpcMode = "ok";
+  docListeners.get("click")({ target: { closest: (sel) => (sel === "#retry-live" ? {} : null) } });
+  await new Promise((r) => setTimeout(r, 100));
+  ok(bootCtx().mode === "live", "manual retry recovers, got " + bootCtx().mode);
+  ok(rpcAuto.attempts === 0, "backoff reset after success");
+
+  // 13. Quote feed down -> failures counted, retry scheduled
+  await scenario("quote-backoff", () => { global.__jupDown = true; });
+  ok(quoteAuto.fails >= 1, "quote fails counted, got " + quoteAuto.fails);
+  ok(quoteAuto.timer !== null, "quote retry scheduled");
+  ok(/quote-retry-note/.test(els.get("tape-stocks").innerHTML), "tape has quote retry note slot");
+
+  // 14. Feed preserves expanded groups across re-renders
+  await scenario("feed-preserve", null);
+  global.__openEls = [{ _sel: "#feed-body .feed-group.open", getAttribute: () => "g-bounty-001" }];
+  renderFeed(bootCtx());
+  const fb = els.get("feed-body").innerHTML;
+  ok(fb.includes('data-group="g-bounty-001"') && /feed-group open/.test(fb), "expanded group survives re-render");
+
+  // 15. Probe regression: a degraded load that dropped the treasury must not break the next probe
+  await scenario("probe-regression", () => { rpcMode = "agent2-down"; });
+  delete bootCtx().vaults.treasury; // simulate prior degraded load without treasury
+  rpcMode = "ok";
+  await attemptLive();
+  await new Promise((r) => setTimeout(r, 50));
+  ok(bootCtx().mode === "live", "probe uses snapshot PDA, got " + bootCtx().mode);
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

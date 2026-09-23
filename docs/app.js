@@ -107,6 +107,24 @@ for (const q of STOCK_QUOTES) q.live = null;
 const JUP_PRICE_URL = "https://lite-api.jup.ag/price/v3?ids=";
 let quotesLiveAt = 0, quotesLiveCount = 0, quotesError = "", quotesUpgraded = false;
 
+/* Quote-feed auto-retry: 60s healthy cadence; on failure back off
+   120s → 240s → 300s (cap) so a struggling feed isn't hammered. */
+const quoteAuto = { fails: 0, timer: null, nextAt: 0 };
+function quoteDelayMs(fails) {
+  if (fails <= 0) return 60_000;
+  return Math.min(60_000 * Math.pow(2, Math.min(fails, 3)), 300_000);
+}
+function scheduleQuoteRefresh(ctx) {
+  clearTimeout(quoteAuto.timer);
+  const wait = quoteDelayMs(quoteAuto.fails);
+  quoteAuto.nextAt = Date.now() + wait;
+  quoteAuto.timer = setTimeout(() => { quoteAuto.timer = null; quoteLoop(ctx); }, wait);
+}
+async function quoteLoop(ctx) {
+  await refreshLiveQuotes(ctx); // never throws — failures are counted inside
+  scheduleQuoteRefresh(ctx);
+}
+
 async function refreshLiveQuotes(ctx) {
   try {
     const r = await fetch(JUP_PRICE_URL + STOCK_QUOTES.map((q) => q.mint).join(","));
@@ -118,7 +136,14 @@ async function refreshLiveQuotes(ctx) {
       if (p && p.usdPrice) { q.live = { px: p.usdPrice, chgPct: p.priceChange24h ?? 0 }; n++; }
     }
     quotesLiveAt = Date.now(); quotesLiveCount = n; quotesError = "";
-    if (ctx && n > 0) {
+    if (n === 0) {
+      quoteAuto.fails++;
+      quotesError = "empty quote response";
+      renderTapes(ctx);
+      return;
+    }
+    quoteAuto.fails = 0;
+    if (ctx) {
       // Re-mark AUM to the live SPCX quote so the tapes agree on one price.
       const spcx = STOCK_QUOTES.find((x) => x.sym === "SPCX");
       if (spcx?.live?.px) {
@@ -130,6 +155,7 @@ async function refreshLiveQuotes(ctx) {
       }
     }
   } catch (e) {
+    quoteAuto.fails++;
     quotesError = e?.message ?? String(e);
     renderTapes(ctx);
   }
@@ -177,6 +203,27 @@ const live = {
   signaturesForAddress: (address, limit = 12) =>
     rpcCall("getSignaturesForAddress", [address, { limit }]),
 };
+
+/* RPC auto-retry: exponential backoff 10s → 20s → 40s → 80s → 160s → 300s (cap),
+   ±20% jitter. After repeated failures the tier idles at the 5-min cooldown;
+   the RETRY LIVE button always forces an immediate attempt. */
+const rpcAuto = { attempts: 0, timer: null, nextAt: 0, inflight: false, refreshTimer: null };
+function rpcBackoffMs(attempts) {
+  const base = 10_000 * Math.pow(2, Math.max(0, attempts - 1));
+  const jittered = base * (0.8 + Math.random() * 0.4); // ±20% jitter
+  return Math.min(Math.floor(jittered), 300_000); // hard 5-min cap
+}
+function scheduleRpcRetry(ctx) {
+  clearTimeout(rpcAuto.timer);
+  const wait = rpcBackoffMs(rpcAuto.attempts);
+  rpcAuto.nextAt = Date.now() + wait;
+  rpcAuto.timer = setTimeout(() => { rpcAuto.timer = null; attemptLive({ auto: true }); }, wait);
+}
+function scheduleRpcRefresh(ctx) {
+  // steady-state: re-check vaults every 5 min while healthy
+  clearTimeout(rpcAuto.refreshTimer);
+  rpcAuto.refreshTimer = setTimeout(() => { rpcAuto.refreshTimer = null; attemptLive({ auto: true, quiet: true }); }, 300_000);
+}
 
 async function tokenHoldingsLive(owner) {
   const out = [];
@@ -373,13 +420,16 @@ function setMode(mode, ts, note) {
   }
 }
 
-/** Re-run the live tier on demand (banner retry button). */
-async function attemptLive() {
-  if (!bootCtx) return;
+/** Re-run the live tier (banner retry button, auto-retry timer, or background refresh).
+ *  The probe reads the treasury PDA from the committed snapshot — the address is
+ *  stable even when a previous degraded load dropped the treasury vault. */
+async function attemptLive(opts = {}) {
+  if (!bootCtx || rpcAuto.inflight) return;
   const ctx = bootCtx;
-  setMode("connecting");
+  rpcAuto.inflight = true;
+  if (!opts.quiet) setMode("connecting");
   try {
-    const probe = ctx.vaults.treasury?.vaultPda;
+    const probe = ctx.snapshot.vaults?.treasury?.vaultPda;
     if (!probe) throw new Error("no treasury vault in snapshot");
     await live.balance(probe);
     const { vaults, degraded } = await loadLiveVaults(ctx.snapshot);
@@ -391,12 +441,25 @@ async function attemptLive() {
         if (s?.signature && s.blockTime) ctx.sigTs[s.signature] = s.blockTime;
       }
     }
-    setMode(ctx.mode, ctx.ts, degraded.map((d) => `${d.name}: ${d.error}`).join("; "));
+    const note = degraded.map((d) => `${d.name}: ${d.error}`).join("; ");
+    if (degraded.length) {
+      rpcAuto.attempts++;
+      scheduleRpcRetry(ctx);
+    } else {
+      rpcAuto.attempts = 0;
+      clearTimeout(rpcAuto.timer); rpcAuto.timer = null;
+      scheduleRpcRefresh(ctx);
+    }
+    setMode(ctx.mode, ctx.ts, note);
   } catch (e) {
     ctx.mode = "snapshot";
+    rpcAuto.attempts++;
+    scheduleRpcRetry(ctx);
     const msg = e?.message ?? String(e);
     console.warn("live tier failed:", msg);
     setMode("snapshot", ctx.snapshot.snapshotTs, msg);
+  } finally {
+    rpcAuto.inflight = false;
   }
   renderTapes(ctx);
   renderOverview(ctx);
@@ -435,7 +498,7 @@ function renderTapes(ctx) {
   const totalN = STOCK_QUOTES.length;
   const statusItem = liveN > 0
     ? `<span class="tape-item"><span class="up">● LIVE ${liveN}/${totalN} ONCHAIN · JUPITER · ${etSec(quotesLiveAt / 1000)} ET</span><span class="sep">///</span></span>`
-    : `<span class="tape-item"><span class="k">○ REF ONLY · LIVE QUOTES UNREACHABLE${quotesError ? " (" + esc(quotesError) + ")" : ""} · UNDERLYING REF ${esc(STOCK_QUOTES_TS)}</span><span class="sep">///</span></span>`;
+    : `<span class="tape-item"><span class="k">○ REF ONLY · LIVE QUOTES UNREACHABLE${quotesError ? " (" + esc(quotesError) + ")" : ""} · UNDERLYING REF ${esc(STOCK_QUOTES_TS)}<span id="quote-retry-note"></span></span><span class="sep">///</span></span>`;
   const qItems = STOCK_QUOTES.map((q) => {
     const px = q.live ? q.live.px : q.px;
     const chg = q.live ? q.live.chgPct : q.chgPct;
@@ -579,6 +642,10 @@ function schedHtml(s, ctx) {
 function renderAgents(ctx) {
   const order = ["agent1", "agent2"];
   const ids = { agent1: "agent-1", agent2: "agent-2" };
+  // Preserve manually-expanded cards across background re-renders.
+  const openCards = new Set(
+    [...document.querySelectorAll("#agents-body .agent-card.open")].map((c) => c.getAttribute("data-agent"))
+  );
   $("agents-meta").textContent = order.filter((k) => ctx.vaults[k]).length + " squads vaults · click to expand";
 
   $("agents-body").innerHTML = order.map((key, i) => {
@@ -624,8 +691,8 @@ function renderAgents(ctx) {
         }).join("")
       : `<p class="empty-note">no onchain history yet.</p>`;
 
-    return `<div class="agent-card" data-agent="${id}">
-      <div class="agent-head" role="button" tabindex="0" aria-expanded="false">
+    return `<div class="agent-card${openCards.has(id) ? " open" : ""}" data-agent="${id}">
+      <div class="agent-head" role="button" tabindex="0" aria-expanded="${openCards.has(id)}">
         <span class="status-dot ${active ? "on" : "idle"}"></span>
         <span class="agent-id">AGENT-${i + 1}</span>
         <span class="agent-label">${esc(label)}</span>
@@ -733,6 +800,11 @@ function feedItemHtml(e) {
 function renderFeed(ctx) {
   feedCtx = ctx;
   const now = ctx.ts;
+  // Preserve manually-expanded groups across background re-renders
+  // (auto-retries re-render the wire; collapsing the user's view would be rude).
+  const openGroups = new Set(
+    [...document.querySelectorAll("#feed-body .feed-group.open")].map((g) => g.getAttribute("data-group"))
+  );
   const events = [];
 
   for (const s of allSigs(ctx)) {
@@ -793,9 +865,9 @@ function renderFeed(ctx) {
       if (seen.has(e.group)) continue;
       seen.add(e.group);
       const evs = groups.get(e.group);
-      const open = expand ? " open" : "";
-      html += `<div class="feed-group${open}" data-group="${esc(e.group)}">
-        <div class="group-head" role="button" tabindex="0" aria-expanded="${expand}">
+      const isOpen = expand || openGroups.has(e.group);
+      html += `<div class="feed-group${isOpen ? " open" : ""}" data-group="${esc(e.group)}">
+        <div class="group-head" role="button" tabindex="0" aria-expanded="${isOpen}">
           <span class="chev">▸</span>
           <span class="group-title">${groupTitle(e.group, ctx)}</span>
           <span class="group-count">${evs.length} event${evs.length === 1 ? "" : "s"}</span>
@@ -875,6 +947,19 @@ function startClock() {
   const tick = () => {
     const p = etParts(Math.floor(Date.now() / 1000));
     el.textContent = `${p.h}:${p.min}:${p.s} ET`;
+    // live-tier retry countdowns (1s tick keeps them fresh)
+    const rn = $("retry-note");
+    if (rn) {
+      rn.textContent = (rpcAuto.timer && rpcAuto.nextAt > Date.now())
+        ? ` · auto-retry in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s (attempt ${rpcAuto.attempts + 1})`
+        : "";
+    }
+    const qn = $("quote-retry-note");
+    if (qn) {
+      qn.textContent = (quoteAuto.timer && quoteAuto.nextAt > Date.now() && quoteAuto.fails > 0)
+        ? ` · retrying in ${Math.ceil((quoteAuto.nextAt - Date.now()) / 1000)}s`
+        : "";
+    }
   };
   tick();
   setInterval(tick, 1000);
@@ -902,9 +987,12 @@ document.addEventListener("click", (e) => {
     }
     return;
   }
-  // banner retry: re-run the live RPC tier
+  // banner retry: re-run the live RPC tier immediately, resetting the backoff
   if (e.target.closest("#retry-live")) {
-    attemptLive();
+    rpcAuto.attempts = 0;
+    clearTimeout(rpcAuto.timer); rpcAuto.timer = null;
+    clearTimeout(rpcAuto.refreshTimer); rpcAuto.refreshTimer = null;
+    attemptLive({ manual: true });
     return;
   }
   // view tabs
@@ -1015,9 +1103,9 @@ async function boot() {
   renderFeed(ctx);
   renderBounties(ctx);
 
-  // Live quote feed (independent of RPC tier): upgrades the SPCX mark + stocks tape.
-  refreshLiveQuotes(ctx);
-  setInterval(() => refreshLiveQuotes(ctx), 60_000);
+  // Live quote feed (independent of RPC tier): immediate fetch, then
+  // self-scheduling with backoff — upgrades the SPCX mark + stocks tape.
+  quoteLoop(ctx);
 
   // Tier 1: live RPC. attemptLive() re-renders everything on completion.
   attemptLive();
