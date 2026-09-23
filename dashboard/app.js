@@ -498,7 +498,7 @@ function renderTapes(ctx) {
   const totalN = STOCK_QUOTES.length;
   const statusItem = liveN > 0
     ? `<span class="tape-item"><span class="up">● LIVE ${liveN}/${totalN} ONCHAIN · JUPITER · ${etSec(quotesLiveAt / 1000)} ET</span><span class="sep">///</span></span>`
-    : `<span class="tape-item"><span class="k">○ REF ONLY · LIVE QUOTES UNREACHABLE${quotesError ? " (" + esc(quotesError) + ")" : ""} · UNDERLYING REF ${esc(STOCK_QUOTES_TS)}<span id="quote-retry-note"></span></span><span class="sep">///</span></span>`;
+    : `<span class="tape-item"><span class="k">○ REF ONLY · LIVE QUOTES UNREACHABLE${quotesError ? " (" + esc(quotesError) + ")" : ""} · UNDERLYING REF ${esc(STOCK_QUOTES_TS)}<span class="quote-retry-note"></span></span><span class="sep">///</span></span>`;
   const qItems = STOCK_QUOTES.map((q) => {
     const px = q.live ? q.live.px : q.px;
     const chg = q.live ? q.live.chgPct : q.chgPct;
@@ -954,11 +954,12 @@ function startClock() {
         ? ` · auto-retry in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s (attempt ${rpcAuto.attempts + 1})`
         : "";
     }
-    const qn = $("quote-retry-note");
-    if (qn) {
-      qn.textContent = (quoteAuto.timer && quoteAuto.nextAt > Date.now() && quoteAuto.fails > 0)
+    const qn = document.querySelectorAll(".quote-retry-note");
+    if (qn.length) {
+      const txt = (quoteAuto.timer && quoteAuto.nextAt > Date.now() && quoteAuto.fails > 0)
         ? ` · retrying in ${Math.ceil((quoteAuto.nextAt - Date.now()) / 1000)}s`
         : "";
+      qn.forEach((el) => { el.textContent = txt; });
     }
   };
   tick();
