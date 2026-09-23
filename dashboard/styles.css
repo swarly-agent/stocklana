@@ -628,6 +628,8 @@ footer {
 .about p { margin: 0 0 10px; }
 .about-lede { font-size: 13px; line-height: 1.6; }
 .about-lede strong { color: var(--amber); }
+.agent-file { margin: 10px 0; }
+.agent-file a { color: var(--green); font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
 .about-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 14px; }
 .about h4 { font-size: 11px; letter-spacing: 0.12em; color: var(--amber); margin-bottom: 8px; }
 .steps { list-style: none; }
