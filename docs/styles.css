@@ -98,6 +98,7 @@ code {
   color: var(--text);
 }
 .clock { color: var(--amber); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
+.refresh-note { color: var(--dim); font-size: 10px; letter-spacing: 0.06em; white-space: nowrap; }
 
 /* ══════════ TICKER TAPE ══════════ */
 .tape-wrap {

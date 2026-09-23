@@ -1039,6 +1039,13 @@ function startClock() {
         ? ` · next refresh in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s`
         : "";
     }
+    // header countdown — next to the ET clock, never inside the degraded banner
+    const hn = $("refresh-note");
+    if (hn) {
+      hn.textContent = (rpcAuto.timer && rpcAuto.nextAt > Date.now())
+        ? `next refresh in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s`
+        : "";
+    }
     const qn = document.querySelectorAll(".quote-retry-note");
     if (qn.length) {
       const txt = (quoteAuto.timer && quoteAuto.nextAt > Date.now() && quoteAuto.fails > 0)
