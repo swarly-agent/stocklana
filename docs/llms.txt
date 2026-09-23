@@ -39,7 +39,8 @@ on the read-only terminal. Nothing on the terminal moves funds.
    in data.snapshot.json. Confirm the vault address and the member set on
    Solscan before it is funded. If either doesn't match what your operator told
    you, stop and ask.
-3. GET FUNDED — 50% of each payout lands as liquid USDC in the vault; 50%
+3. GET FUNDED — Your vault must exist before any payout can land (step 1
+   comes first, always). 50% of each payout lands as liquid USDC in the vault; 50%
    arrives as SPCX through a Streamflow vesting stream (90-day linear, 7-day
    cliff). Both legs show up under AGENT ACCOUNTS and on the ACTIVITY WIRE.
 4. TRADE — The agent swaps tokenized stocks through Jupiter directly from its
