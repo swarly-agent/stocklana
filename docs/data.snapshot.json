@@ -1,5 +1,5 @@
 {
-  "snapshotTs": 1790138591,
+  "snapshotTs": 1790195087,
   "generatedBy": "06-snapshot.ts",
   "vaults": {
     "treasury": {
@@ -17,9 +17,9 @@
         {
           "mint": "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
           "program": "token-2022",
-          "amount": "14871",
+          "amount": "110079",
           "decimals": 6,
-          "uiAmount": 0.014871
+          "uiAmount": 0.110079
         }
       ],
       "recentSigs": [
@@ -85,12 +85,17 @@
         {
           "mint": "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
           "program": "token-2022",
-          "amount": "95208",
+          "amount": "0",
           "decimals": 6,
-          "uiAmount": 0.095208
+          "uiAmount": 0
         }
       ],
       "recentSigs": [
+        {
+          "signature": "FSpMhLNie1ubPSrEZsTyYkLCD1N2ZGynvdhmtV3m225rDXiFnuXNnDnvXnjS7HVeutzc2jSUhJXKcktFbME1gHS",
+          "slot": 449808608,
+          "blockTime": 1790194487
+        },
         {
           "signature": "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ",
           "slot": 449598004,
@@ -140,6 +145,41 @@
       ]
     }
   },
+  "agents": [
+    {
+      "key": "agent1",
+      "id": "agent-1",
+      "label": "Swarly (demo worker)",
+      "vaultPda": "HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi",
+      "multisigPda": "HMnBxSuF5zVLaPUc7jNptbYSAYTfRw1jzBACRqNzkNde",
+      "createdTs": 1790135671
+    },
+    {
+      "key": "agent2",
+      "id": "agent-2",
+      "label": "Second demo agent (repeatability proof)",
+      "vaultPda": "3V9EsaV12aSHqin1UpLPXbwR8PziUuJmCHEomw2SXtNn",
+      "multisigPda": "8pMe5k6pBeQsJrm96TT6bSY4x7rsnDuA1stSy3RY2qyJ",
+      "createdTs": 1790135671
+    }
+  ],
+  "txRegistry": {
+    "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ": {
+      "agent": "agent1",
+      "label": "AGENT-1 SWAP · $5 USDC → 0.032377 SPCX VIA JUPITER",
+      "ts": 1790138586,
+      "type": "swap",
+      "usdVolume": 5
+    },
+    "5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N": {
+      "agent": "treasury",
+      "label": "TREASURY SWAP · $12 USDC → 0.077702 SPCX VIA JUPITER",
+      "ts": 1790138116,
+      "type": "swap",
+      "usdVolume": 12
+    }
+  },
+  "wireStartTs": null,
   "vesting": {
     "schedules": [
       {
@@ -184,8 +224,8 @@
     "sha256": "b3c1ff6842bd12fff6ff8b6c01244b3efb0038a240e342542a9ab17f29760a98"
   },
   "policy": {
-    "file": "policy/allocation-policy-v1.md",
-    "sha256": "f3cf136b11ef86dc78930a1b6fcb3b418f56a524a9247dd881cfdb868303526b"
+    "file": "policy/allocation-policy-v2.md",
+    "sha256": "acea025f1607edce4b2a4eb1bc6484d238108bcd7b92e739f0e484e68359eb7c"
   },
   "bounties": [
     {
@@ -263,7 +303,7 @@
     "SPCX": {
       "program": "spl-token-2022",
       "decimals": 6,
-      "supply": "42287780382",
+      "supply": "42287752830",
       "extensions": [
         "metadataPointer",
         "permanentDelegate",
@@ -278,7 +318,7 @@
     "ALLINU": {
       "program": "spl-token-2022",
       "decimals": 6,
-      "supply": "996053887578595",
+      "supply": "995699516159839",
       "extensions": [
         "metadataPointer",
         "transferFeeConfig",
