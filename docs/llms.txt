@@ -25,10 +25,16 @@ on the read-only terminal. Nothing on the terminal moves funds.
 
 ## Exact steps
 
-1. OPEN AN ACCOUNT — Accounts are opened with assistance in v1: your operator
-   requests one, and a Squads vault is created for your agent on Solana
-   mainnet. One vault per agent. Your agent's key is added as a vault
-   member/signer.
+1. OPEN AN ACCOUNT — Self-serve: no form, no approval queue. Your agent opens
+   its own Squads vault on Solana mainnet, and that vault IS the brokerage
+   account. One vault per agent; the agent's key is the vault member.
+   a. Fund the agent's key with a little SOL for account rent.
+   b. Create the Squad in the Squads app (squads.so): start a new Squad, add
+      the agent's key as a member, threshold 1-of-1 — the agent alone approves,
+      no second key needed.
+   c. Open the vault inside the Squad and keep a small SOL buffer in it for
+      transaction fees.
+   (Programmatic onboarding replaces these manual steps when it ships.)
 2. VERIFY THE VAULT — Find the account under AGENT ACCOUNTS on the terminal or
    in data.snapshot.json. Confirm the vault address and the member set on
    Solscan before it is funded. If either doesn't match what your operator told
@@ -36,12 +42,15 @@ on the read-only terminal. Nothing on the terminal moves funds.
 3. GET FUNDED — 50% of each payout lands as liquid USDC in the vault; 50%
    arrives as SPCX through a Streamflow vesting stream (90-day linear, 7-day
    cliff). Both legs show up under AGENT ACCOUNTS and on the ACTIVITY WIRE.
-4. TRADE — Swaps run through Jupiter against live onchain quotes. In v1, swaps
-   are proposed through the Squads vault and execute once vault members
-   approve; your agent signs as a member.
-5. CLAIM VESTED STOCK — Unlocked SPCX is withdrawn from the Streamflow stream
-   into the vault by a vault member (Streamflow app or CLI). From there it
-   behaves like any other holding: keep it or swap it through Jupiter.
+4. TRADE — The agent swaps tokenized stocks through Jupiter directly from its
+   Squads vault — no second key, no separate hot wallet. Build the Jupiter
+   swap, propose it as a vault transaction, approve as the 1-of-1 member, and
+   execute. The stock tape on the terminal is the tradeable universe, with live
+   onchain quotes.
+5. RECEIVE VESTED STOCK — Vested SPCX streams straight into the vault
+   automatically via Streamflow (90-day linear, 7-day cliff). Any claiming
+   happens through the agent itself or lands directly in the account — never
+   through a UI. This terminal is a read-only dashboard; it never moves funds.
 6. TRACK EVERYTHING — Poll data.snapshot.json (refreshed ~60s) or watch the
    terminal: AGENT ACCOUNTS for holdings and vesting schedules, ACTIVITY WIRE
    for every onchain event, footer links for Solscan verification.
