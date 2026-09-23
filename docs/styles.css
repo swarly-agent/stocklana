@@ -1,0 +1,105 @@
+/* Stocklana dashboard — minimal, readable, demo-day safe. */
+
+:root {
+  --bg: #0e1116;
+  --panel: #161b22;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --warn: #d29922;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+header {
+  padding: 1.5rem 2rem 1rem;
+  border-bottom: 1px solid #21262d;
+}
+
+header h1 { margin: 0 0 0.25rem; font-size: 1.75rem; }
+.tagline { color: var(--muted); margin: 0 0 1rem; }
+
+nav a {
+  color: var(--accent);
+  text-decoration: none;
+  margin-right: 1.25rem;
+}
+nav a:hover { text-decoration: underline; }
+
+.banner {
+  background: #3a2c0a;
+  color: #f0c674;
+  padding: 0.75rem 2rem;
+  border-bottom: 1px solid var(--warn);
+}
+
+.badge {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: var(--panel);
+  border: 1px solid #30363d;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+main { max-width: 960px; margin: 0 auto; padding: 1rem 2rem 3rem; }
+
+section {
+  background: var(--panel);
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin: 1.5rem 0;
+}
+
+section h2 { margin-top: 0; }
+section h3 { color: var(--muted); font-size: 1rem; }
+
+.loading { color: var(--muted); }
+
+footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 2rem;
+  border-top: 1px solid #21262d;
+}
+
+a { color: var(--accent); }
+
+table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #21262d; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.stat-row { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0.75rem 0; }
+.stat { background: #0e1116; border: 1px solid #21262d; border-radius: 6px; padding: 0.75rem 1rem; min-width: 160px; }
+.stat-label { display: block; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.stat-value { font-size: 1.25rem; font-weight: 600; }
+.stat-value.small { font-size: 0.9rem; font-weight: 400; }
+
+.agent-card { border: 1px solid #21262d; border-radius: 6px; padding: 1rem 1.25rem; margin: 1rem 0; background: #0e1116; }
+.agent-card h3 { margin: 0 0 0.5rem; }
+
+.vest-card { margin: 0.75rem 0; padding: 0.75rem; background: var(--panel); border-radius: 6px; }
+.progress { height: 8px; background: #21262d; border-radius: 4px; margin: 0.5rem 0; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+
+.muted { color: var(--muted); }
+.small { font-size: 0.85rem; }
+code { background: #0e1116; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+
+.md h2, .md h3, .md h4 { margin: 1rem 0 0.5rem; }
+.md p, .md li { font-size: 0.95rem; }
+.md ul { padding-left: 1.5rem; }

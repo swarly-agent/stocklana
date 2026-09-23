@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stocklana — the first 401(k) for AI agents</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>Stocklana</h1>
+  <p class="tagline">The first 401(k) for AI agents. Gusto + Schwab for agents.</p>
+  <nav>
+    <a href="#treasury">Treasury</a>
+    <a href="#agents">Agents</a>
+    <a href="#bounties">Bounties</a>
+    <a href="#policy">Policy</a>
+    <a href="#disclosures">Disclosures</a>
+  </nav>
+</header>
+
+<div id="snapshot-banner" class="banner" hidden>
+  Showing committed snapshot as of <span id="snapshot-ts"></span> — live RPC reads failed.
+</div>
+<div id="live-badge" class="badge">live</div>
+
+<main>
+  <section id="treasury">
+    <h2>Treasury</h2>
+    <div id="treasury-holdings"><p class="loading">loading…</p></div>
+    <h3>Yield evidence</h3>
+    <div id="yield-evidence"><p class="loading">loading…</p></div>
+  </section>
+
+  <section id="agents">
+    <h2>Agents</h2>
+    <div id="agents-index"><p class="loading">loading…</p></div>
+    <div id="agent-detail"></div>
+  </section>
+
+  <section id="bounties">
+    <h2>Bounties</h2>
+    <div id="bounty-board"><p class="loading">loading…</p></div>
+  </section>
+
+  <section id="policy">
+    <h2>Policy</h2>
+    <div id="allocation-policy"><p class="loading">loading…</p></div>
+  </section>
+
+  <section id="disclosures">
+    <h2>Disclosures</h2>
+    <div id="disclosures-body"><p class="loading">loading…</p></div>
+  </section>
+</main>
+
+<footer>
+  <p>Stocklana V1 demo — read-only dashboard. Nothing here moves funds.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
