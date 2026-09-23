@@ -2,19 +2,21 @@
  * MUSEX TERMINAL — dependency-free, zero build step.
  *
  * DATA POLICY: read-only. This file NEVER contains, requests, or transmits
- * any API key, secret, or private key. Live reads use PUBLIC RPC endpoints
- * only — the same endpoints anyone's browser can hit without a key.
+ * any API key, secret, or private key. Live reads go through our edge proxy
+ * (stocklana-rpc), which injects the API key server-side — the browser never
+ * sees or transmits it. Keyless public RPC endpoints remain as fallback only.
  * NO API KEY IN BROWSER CODE — EVER.
  *
- * Snapshot model (no streaming): balances refresh every 60s from public
- * Solana RPC; stock quotes refresh every 60s from Jupiter's price API.
+ * Snapshot model (no streaming): balances refresh every 60s from our Solana
+ * RPC proxy (keyless public endpoints as fallback); stock quotes refresh
+ * every 60s from Jupiter's price API.
  * Every number on screen carries the timestamp of the snapshot it came
  * from — the header badge reads "AS OF HH:MM:SS ET", green when fresh,
  * amber when stale. A failed refresh keeps the last good numbers, shows
  * a banner naming the last-good time, and retries on the next 60s tick.
- * Vault reads are staggered (not one parallel burst) so keyless public
- * RPCs don't rate-limit us; background-tab foregrounding does one quiet
- * refresh instead of letting stacked timers burst.
+ * Vault reads are staggered (not one parallel burst) so neither the proxy
+ * nor the fallback RPCs rate-limit us; background-tab foregrounding does
+ * one quiet refresh instead of letting stacked timers burst.
  *
  * Live stock quotes: Jupiter's public price API (no key, CORS-open), one
  * batch call for all Backpack Securities mints, refreshed every 60s. Baked
@@ -26,7 +28,10 @@
 
 /* ───────────────────────── constants ───────────────────────── */
 
+// Primary: our Cloudflare edge proxy (key injected server-side, allowlisted
+// methods, per-IP rate limits). Fallbacks: keyless public endpoints.
 const RPC_ENDPOINTS = [
+  "https://stocklana-rpc.swarly-agent.workers.dev",
   "https://solana-rpc.publicnode.com",
   "https://api.mainnet-beta.solana.com",
 ];
@@ -208,7 +213,7 @@ const live = {
 
 /* Balance refresh: flat 60s snapshot cadence. Vaults are read SEQUENTIALLY
    with a small stagger between them — one parallel burst is what earns 429s
-   from keyless public RPCs. On failure the next tick simply retries in 60s;
+   from the proxy or fallback RPCs. On failure the next tick simply retries in 60s;
    no exponential backoff, so a transient blip never parks the UI. The RETRY
    button always forces an immediate attempt. */
 const BALANCE_REFRESH_MS = 60_000;
@@ -329,7 +334,7 @@ async function loadLiveVaults(snap) {
   const vaults = {};
   const degraded = [];
   // Sequential with stagger — NOT Promise.all across vaults. One parallel
-  // burst per refresh is what gets keyless public RPCs to 429 us.
+  // burst per refresh is what gets the proxy or fallback RPCs to 429 us.
   const entries = Object.entries(snap.vaults ?? {}).filter(([, v]) => v?.vaultPda);
   for (let i = 0; i < entries.length; i++) {
     const [name, v] = entries[i];
