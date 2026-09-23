@@ -6,13 +6,15 @@
  * only — the same endpoints anyone's browser can hit without a key.
  * NO API KEY IN BROWSER CODE — EVER.
  *
- * Two-tier data layer:
- *   Tier 1 (live): client-side fetch to public RPCs with rotation, 8s
- *     timeout, 60s in-memory cache. Vault addresses come from the committed
- *     snapshot (stable), balances/tokens/signatures read live. One flaky
- *     vault no longer forces snapshot mode — it falls back per-vault.
- *   Tier 2 (fallback): committed data.snapshot.json rendered with a visible
- *     "SNAPSHOT MODE" banner. The demo never shows a blank screen.
+ * Snapshot model (no streaming): balances refresh every 60s from public
+ * Solana RPC; stock quotes refresh every 60s from Jupiter's price API.
+ * Every number on screen carries the timestamp of the snapshot it came
+ * from — the header badge reads "AS OF HH:MM:SS ET", green when fresh,
+ * amber when stale. A failed refresh keeps the last good numbers, shows
+ * a banner naming the last-good time, and retries on the next 60s tick.
+ * Vault reads are staggered (not one parallel burst) so keyless public
+ * RPCs don't rate-limit us; background-tab foregrounding does one quiet
+ * refresh instead of letting stacked timers burst.
  *
  * Live stock quotes: Jupiter's public price API (no key, CORS-open), one
  * batch call for all Backpack Securities mints, refreshed every 60s. Baked
@@ -204,26 +206,26 @@ const live = {
     rpcCall("getSignaturesForAddress", [address, { limit }]),
 };
 
-/* RPC auto-retry: exponential backoff 10s → 20s → 40s → 80s → 160s → 300s (cap),
-   ±20% jitter. After repeated failures the tier idles at the 5-min cooldown;
-   the RETRY LIVE button always forces an immediate attempt. */
-const rpcAuto = { attempts: 0, timer: null, nextAt: 0, inflight: false, refreshTimer: null };
-function rpcBackoffMs(attempts) {
-  const base = 10_000 * Math.pow(2, Math.max(0, attempts - 1));
-  const jittered = base * (0.8 + Math.random() * 0.4); // ±20% jitter
-  return Math.min(Math.floor(jittered), 300_000); // hard 5-min cap
-}
-function scheduleRpcRetry(ctx) {
+/* Balance refresh: flat 60s snapshot cadence. Vaults are read SEQUENTIALLY
+   with a small stagger between them — one parallel burst is what earns 429s
+   from keyless public RPCs. On failure the next tick simply retries in 60s;
+   no exponential backoff, so a transient blip never parks the UI. The RETRY
+   button always forces an immediate attempt. */
+const BALANCE_REFRESH_MS = 60_000;
+const VAULT_STAGGER_MS = 400;
+const rpcAuto = { timer: null, nextAt: 0, inflight: false, lastAttempt: 0 };
+function scheduleRpcRefresh() {
   clearTimeout(rpcAuto.timer);
-  const wait = rpcBackoffMs(rpcAuto.attempts);
-  rpcAuto.nextAt = Date.now() + wait;
-  rpcAuto.timer = setTimeout(() => { rpcAuto.timer = null; attemptLive({ auto: true }); }, wait);
+  rpcAuto.nextAt = Date.now() + BALANCE_REFRESH_MS;
+  rpcAuto.timer = setTimeout(() => { rpcAuto.timer = null; attemptLive({ auto: true, quiet: true }); }, BALANCE_REFRESH_MS);
 }
-function scheduleRpcRefresh(ctx) {
-  // steady-state: re-check vaults every 5 min while healthy
-  clearTimeout(rpcAuto.refreshTimer);
-  rpcAuto.refreshTimer = setTimeout(() => { rpcAuto.refreshTimer = null; attemptLive({ auto: true, quiet: true }); }, 300_000);
+function refreshSoon(ms = 2000) {
+  // one quiet refresh (tab foregrounding, manual retry) — resets the cadence
+  clearTimeout(rpcAuto.timer);
+  rpcAuto.nextAt = Date.now() + ms;
+  rpcAuto.timer = setTimeout(() => { rpcAuto.timer = null; attemptLive({ auto: true, quiet: true }); }, ms);
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function tokenHoldingsLive(owner) {
   const out = [];
@@ -281,6 +283,7 @@ function etParts(ts) {
 }
 const et = (ts) => { const p = etParts(ts); return `${p.m}-${p.d} ${p.h}:${p.min}`; };
 const etSec = (ts) => { const p = etParts(ts); return `${p.m}-${p.d} ${p.h}:${p.min}:${p.s}`; };
+const etClock = (ms) => { const p = etParts(ms / 1000); return `${p.h}:${p.min}:${p.s}`; };
 const etFull = (ts) => { const p = etParts(ts); return `${p.y}-${p.m}-${p.d} ${p.h}:${p.min}:${p.s}`; };
 
 const tokenLabel = (mint) => MINT_LABELS[mint] ?? shortAddr(mint);
@@ -325,8 +328,12 @@ async function optional(p) { try { return await p; } catch { return null; } }
 async function loadLiveVaults(snap) {
   const vaults = {};
   const degraded = [];
-  await Promise.all(Object.entries(snap.vaults ?? {}).map(async ([name, v]) => {
-    if (!v?.vaultPda) return;
+  // Sequential with stagger — NOT Promise.all across vaults. One parallel
+  // burst per refresh is what gets keyless public RPCs to 429 us.
+  const entries = Object.entries(snap.vaults ?? {}).filter(([, v]) => v?.vaultPda);
+  for (let i = 0; i < entries.length; i++) {
+    const [name, v] = entries[i];
+    if (i > 0) await sleep(VAULT_STAGGER_MS);
     try {
       const [sol, tokens, sigs] = await Promise.all([
         live.balance(v.vaultPda),
@@ -350,7 +357,7 @@ async function loadLiveVaults(snap) {
         recentSigs: v.recentSigs ?? [],
       };
     }
-  }));
+  }
   return { vaults, degraded };
 }
 
@@ -379,88 +386,80 @@ function txLabelFor(sig, ctx) {
 
 /* ───────────────────────── renderers ───────────────────────── */
 
-function setMode(mode, ts, note) {
+/* Honest data badge: no LIVE/SNAPSHOT theater. The badge always shows WHEN
+   the balances were last refreshed; the dot is green when fresh (<2 min),
+   amber when stale. The numbers on screen are never newer than their label.
+   A failed refresh keeps the last good numbers, names their timestamp in the
+   banner, and retries on the next 60s tick. */
+function renderDataBadge(ctx) {
   const dot = $("net-dot");
   const badge = $("mode-badge");
   const text = $("mode-text");
   const banner = $("snap-banner");
-  const setDots = (cls) => {
-    dot.className = "dot " + cls;
-    badge.querySelector(".dot").className = "dot " + cls;
-  };
-  if (mode === "live") {
-    setDots("live");
-    text.textContent = "LIVE";
-    text.style.color = "var(--green)";
-    banner.hidden = true;
-  } else if (mode === "connecting") {
-    setDots("snap");
-    text.textContent = "CONNECTING";
-    text.style.color = "var(--amber)";
-    banner.hidden = true;
-  } else if (mode === "degraded") {
-    setDots("snap");
-    text.textContent = "LIVE*";
-    text.style.color = "var(--amber)";
+  const stale = ctx.staleVaults ?? [];
+  const vaultN = Object.keys(ctx.vaults ?? {}).length;
+  const fresh = ctx.balancesAt > 0 && stale.length === 0 && Date.now() - ctx.balancesAt < 120_000;
+  const cls = fresh ? "live" : "snap";
+  dot.className = "dot " + cls;
+  badge.querySelector(".dot").className = "dot " + cls;
+  text.textContent = ctx.balancesAt > 0 ? "AS OF " + etClock(ctx.balancesAt) + " ET" : "CONNECTING";
+  text.style.color = fresh ? "var(--green)" : "var(--amber)";
+  if (ctx.balancesError && ctx.balancesAt > 0) {
     banner.hidden = false;
-    $("snap-text").innerHTML =
-      `LIVE (DEGRADED) — ${esc(note ?? "some vaults unreadable")}. ` +
-      `Affected balances fall back to the committed snapshot; everything else is live.`;
+    const allStale = vaultN > 0 && stale.length >= vaultN;
+    $("snap-text").innerHTML = allStale
+      ? `BALANCES STALE — Solana RPC unreachable (${esc(ctx.balancesError)}). ` +
+        `Showing last good balances as of <strong>${etClock(ctx.balancesAt)} ET</strong>. Next try shortly.`
+      : `PARTIAL REFRESH — ${esc(stale.join(", "))} unreadable, showing their last good figures. ` +
+        `Everything else as of <strong>${etClock(ctx.balancesAt)} ET</strong>.`;
     $("retry-live").hidden = false;
+  } else if (!(ctx.balancesAt > 0)) {
+    banner.hidden = false;
+    $("snap-text").innerHTML = `CONNECTING — reading live balances from Solana RPC…`;
+    $("retry-live").hidden = true;
   } else {
-    // snapshot
-    setDots("snap");
-    text.textContent = "SNAPSHOT";
-    text.style.color = "var(--amber)";
-    banner.hidden = false;
-    $("snap-text").innerHTML =
-      `SNAPSHOT MODE — live RPC unreachable${note ? ` (${esc(note)})` : ""}. ` +
-      `Showing committed onchain snapshot as of <strong>${etFull(ts)}</strong> ET. Balances may have moved since.`;
-    $("retry-live").hidden = false;
+    banner.hidden = true;
   }
 }
 
-/** Re-run the live tier (banner retry button, auto-retry timer, or background refresh).
- *  The probe reads the treasury PDA from the committed snapshot — the address is
- *  stable even when a previous degraded load dropped the treasury vault. */
+/** Re-run the balance refresh (60s cadence, retry button, tab foregrounding).
+ *  Vault addresses come from the committed snapshot (stable); a failed vault
+ *  falls back to its snapshot rows without tainting the others. */
 async function attemptLive(opts = {}) {
   if (!bootCtx || rpcAuto.inflight) return;
   const ctx = bootCtx;
   rpcAuto.inflight = true;
-  if (!opts.quiet) setMode("connecting");
+  rpcAuto.lastAttempt = Date.now();
   try {
-    const probe = ctx.snapshot.vaults?.treasury?.vaultPda;
-    if (!probe) throw new Error("no treasury vault in snapshot");
-    await live.balance(probe);
     const { vaults, degraded } = await loadLiveVaults(ctx.snapshot);
     ctx.vaults = vaults;
-    ctx.mode = degraded.length ? "degraded" : "live";
-    ctx.ts = Math.floor(Date.now() / 1000);
+    const stale = degraded.map((d) => d.name);
+    ctx.staleVaults = stale;
+    // The aggregate timestamp only advances when at least one vault actually
+    // refreshed — if every vault failed, the numbers on screen are still the
+    // last good set and the badge must say so.
+    if (stale.length < Object.keys(vaults).length) {
+      ctx.balancesAt = Date.now();
+      ctx.ts = Math.floor(ctx.balancesAt / 1000);
+    }
     for (const v of Object.values(ctx.vaults)) {
       for (const s of v.recentSigs ?? []) {
         if (s?.signature && s.blockTime) ctx.sigTs[s.signature] = s.blockTime;
       }
     }
-    const note = degraded.map((d) => `${d.name}: ${d.error}`).join("; ");
-    if (degraded.length) {
-      rpcAuto.attempts++;
-      scheduleRpcRetry(ctx);
-    } else {
-      rpcAuto.attempts = 0;
-      clearTimeout(rpcAuto.timer); rpcAuto.timer = null;
-      scheduleRpcRefresh(ctx);
-    }
-    setMode(ctx.mode, ctx.ts, note);
+    ctx.balancesError = degraded.length
+      ? degraded.map((d) => `${d.name}: ${d.error}`).join("; ")
+      : "";
+    if (ctx.balancesError) console.warn("balance refresh degraded:", ctx.balancesError);
   } catch (e) {
-    ctx.mode = "snapshot";
-    rpcAuto.attempts++;
-    scheduleRpcRetry(ctx);
-    const msg = e?.message ?? String(e);
-    console.warn("live tier failed:", msg);
-    setMode("snapshot", ctx.snapshot.snapshotTs, msg);
+    // total failure: keep the last good vaults and their timestamp
+    ctx.balancesError = e?.message ?? String(e);
+    console.warn("balance refresh failed:", ctx.balancesError);
   } finally {
     rpcAuto.inflight = false;
   }
+  scheduleRpcRefresh();
+  renderDataBadge(ctx);
   renderTapes(ctx);
   renderOverview(ctx);
   renderAgents(ctx);
@@ -546,6 +545,7 @@ function renderOverview(ctx) {
       <div class="row"><span>TREASURY</span><span class="num">${fmtTok(tUsdc, 2)} USDC · ${fmtTok(tSpcx)} SPCX</span></div>
       <div class="row"><span>AGENT-1</span><span class="num">${fmtTok(a1Spcx)} SPCX · ${fmtUsd(vaultUsd(a1, ctx.spcxMark))}</span></div>
       <div class="row"><span>POLICY</span><span class="num">50/50 · poster pays +2.5% fee</span></div>
+      <div class="row"><span class="dim">BALANCES AS OF</span><span class="num dim">${ctx.balancesAt > 0 ? etClock(ctx.balancesAt) + " ET" : "—"}</span></div>
       <div class="row"><span class="dim">SPCX MARK</span><span class="num dim">${fmtUsd(ctx.spcxMark)} · ${ctx.priceSource === "live" ? "live onchain" : "broker ref"}</span></div>
       <div class="row"><span class="dim">ex SOL (rent/fees)</span><span class="num dim">${fmtTok(tot.sol, 4)} SOL</span></div>
     </div>`;
@@ -951,7 +951,7 @@ function startClock() {
     const rn = $("retry-note");
     if (rn) {
       rn.textContent = (rpcAuto.timer && rpcAuto.nextAt > Date.now())
-        ? ` · auto-retry in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s (attempt ${rpcAuto.attempts + 1})`
+        ? ` · next refresh in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s`
         : "";
     }
     const qn = document.querySelectorAll(".quote-retry-note");
@@ -988,12 +988,9 @@ document.addEventListener("click", (e) => {
     }
     return;
   }
-  // banner retry: re-run the live RPC tier immediately, resetting the backoff
+  // banner retry: force an immediate balance refresh, resetting the cadence
   if (e.target.closest("#retry-live")) {
-    rpcAuto.attempts = 0;
-    clearTimeout(rpcAuto.timer); rpcAuto.timer = null;
-    clearTimeout(rpcAuto.refreshTimer); rpcAuto.refreshTimer = null;
-    attemptLive({ manual: true });
+    refreshSoon(250);
     return;
   }
   // view tabs
@@ -1080,8 +1077,10 @@ async function boot() {
   }
 
   const ctx = {
-    mode: "connecting",
     ts: snap.snapshotTs,
+    balancesAt: (snap.snapshotTs ?? 0) * 1000, // honest until first refresh: the numbers ARE the snapshot
+    balancesError: "",
+    staleVaults: [],
     snapshot: snap,
     vaults: snap.vaults ?? {},
     bounties: snap.bounties ?? [],
@@ -1097,7 +1096,7 @@ async function boot() {
 
   // Render the committed snapshot immediately — the page is never blank —
   // then upgrade to live in the background.
-  setMode("connecting");
+  renderDataBadge(ctx);
   renderTapes(ctx);
   renderOverview(ctx);
   renderAgents(ctx);
@@ -1108,8 +1107,18 @@ async function boot() {
   // self-scheduling with backoff — upgrades the SPCX mark + stocks tape.
   quoteLoop(ctx);
 
-  // Tier 1: live RPC. attemptLive() re-renders everything on completion.
+  // Tier 1: Solana RPC balances on the 60s snapshot cadence.
   attemptLive();
+
+  // Foregrounding after a background tab: one quiet refresh instead of
+  // letting stacked timers burst (mobile browsers throttle timers, and a
+  // burst is what earns 429s from keyless public RPCs).
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && bootCtx &&
+        !rpcAuto.inflight && Date.now() - rpcAuto.lastAttempt > 30_000) {
+      refreshSoon(2000);
+    }
+  });
 }
 
 document.addEventListener("DOMContentLoaded", boot);

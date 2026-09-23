@@ -1,5 +1,6 @@
-/* Dashboard render-stub tests: DOM stub + canned fetch, exercises boot, live-tier
-   states (live / degraded / snapshot), the Jupiter quote feed, and ET times. */
+/* Dashboard render-stub tests: DOM stub + canned fetch, exercises boot, the 60s
+   snapshot refresh model (fresh / stale / connecting), the Jupiter quote feed,
+   and ET times. */
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -72,14 +73,14 @@ function fullJup() {
 
 // ---------- load app ----------
 const src = fs.readFileSync(path.join(REPO, "app.js"), "utf8") +
-  "\n;globalThis.__app = { STOCK_QUOTES, et, etFull, etSec, attemptLive, refreshLiveQuotes, renderFeed, " +
-  "rpcAuto, quoteAuto, rpcBackoffMs, quoteDelayMs, scheduleRpcRetry, scheduleQuoteRefresh, quoteLoop, " +
+  "\n;globalThis.__app = { STOCK_QUOTES, et, etFull, etSec, etClock, attemptLive, refreshLiveQuotes, renderFeed, " +
+  "renderDataBadge, refreshSoon, rpcAuto, quoteAuto, quoteDelayMs, scheduleQuoteRefresh, quoteLoop, " +
   "get bootCtx() { return bootCtx; }, " +
   "get quotesLiveCount() { return quotesLiveCount; }, " +
   "__clearCache: () => cache.clear() };";
 eval(src);
-const { STOCK_QUOTES, et, etFull, attemptLive, refreshLiveQuotes, renderFeed,
-  rpcAuto, quoteAuto, rpcBackoffMs, quoteDelayMs, __clearCache } = globalThis.__app;
+const { STOCK_QUOTES, et, etFull, etClock, attemptLive, refreshLiveQuotes, renderFeed,
+  rpcAuto, quoteAuto, quoteDelayMs, __clearCache } = globalThis.__app;
 const quotesLiveCount = () => globalThis.__app.quotesLiveCount;
 const bootCtx = () => globalThis.__app.bootCtx;
 
@@ -93,8 +94,8 @@ const htmlHas = (id) => fs.readFileSync(path.join(REPO, "index.html"), "utf8").i
 async function scenario(name, setup) {
   els.clear();
   __clearCache();
-  for (const t of [rpcAuto.timer, rpcAuto.refreshTimer, quoteAuto.timer]) clearTimeout(t);
-  Object.assign(rpcAuto, { attempts: 0, timer: null, nextAt: 0, inflight: false, refreshTimer: null });
+  for (const t of [rpcAuto.timer, quoteAuto.timer]) clearTimeout(t);
+  Object.assign(rpcAuto, { timer: null, nextAt: 0, inflight: false, lastAttempt: 0 });
   Object.assign(quoteAuto, { fails: 0, timer: null, nextAt: 0 });
   global.__openEls = [];
   for (const q of STOCK_QUOTES) q.live = null;
@@ -102,9 +103,18 @@ async function scenario(name, setup) {
   rpcMode = "ok";
   if (setup) setup();
   await domReadyCb();
-  // let pending promises settle
-  await new Promise((r) => setTimeout(r, 50));
+  await settleRefresh();
   return name;
+}
+
+// Vault reads are staggered (400ms between vaults): wait for the background
+// refresh to finish instead of a fixed sleep.
+async function settleRefresh() {
+  const t0 = Date.now();
+  while (rpcAuto.inflight && Date.now() - t0 < 8000) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  await new Promise((r) => setTimeout(r, 25));
 }
 
 (async () => {
@@ -131,12 +141,15 @@ async function scenario(name, setup) {
   ok(et(ts) === expect, `et() matches system tz (${et(ts)} vs ${expect})`);
   ok(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(etFull(ts)), "etFull shape");
 
-  // 4. Live RPC ok + full Jupiter feed
+  // 4. RPC ok + full Jupiter feed: fresh snapshot, honest badge
   await scenario("live", null);
   const ctx = bootCtx();
-  ok(ctx.mode === "live", "mode live, got " + ctx.mode);
-  ok(els.get("mode-text").textContent === "LIVE", "badge LIVE");
-  ok(els.get("snap-banner").hidden === true, "banner hidden when live");
+  ok(ctx.balancesError === "", "no balance error, got " + ctx.balancesError);
+  ok(ctx.balancesAt > 0, "balances timestamped");
+  const badgeTxt = els.get("mode-text").textContent;
+  ok(/^AS OF \d{2}:\d{2}:\d{2} ET$/.test(badgeTxt), "badge shows AS OF time, got " + badgeTxt);
+  ok(els.get("mode-text").style.color === "var(--green)", "badge green when fresh");
+  ok(els.get("snap-banner").hidden === true, "banner hidden when fresh");
   ok(quotesLiveCount() === 34, "34 live quotes, got " + quotesLiveCount());
   ok(ctx.spcxMark === 151.39, "SPCX mark follows live quote, got " + ctx.spcxMark);
   ok(ctx.priceSource === "live", "priceSource live");
@@ -149,22 +162,28 @@ async function scenario(name, setup) {
   ok(/ET/.test(els.get("ov-activity").innerHTML), "ET in overview reference");
   ok(!/verifier: Sting/.test(els.get("bounties-meta").textContent), "verifier anonymized");
 
-  // 5. Degraded: agent2 RPC fails -> LIVE* with per-vault fallback
+  // 5. One vault's RPC fails -> stale banner naming the vault, others stay fresh
   await scenario("degraded", () => { rpcMode = "agent2-down"; });
-  ok(bootCtx().mode === "degraded", "mode degraded, got " + bootCtx().mode);
-  ok(els.get("mode-text").textContent === "LIVE*", "badge LIVE*");
-  ok(els.get("snap-banner").hidden === false, "banner visible when degraded");
-  ok(/DEGRADED/.test(els.get("snap-text").innerHTML), "banner says degraded");
+  const dctx = bootCtx();
+  ok(/agent2/.test(dctx.balancesError), "error names the failed vault, got " + dctx.balancesError);
+  ok(els.get("mode-text").style.color === "var(--amber)", "badge amber when stale");
+  ok(els.get("snap-banner").hidden === false, "banner visible when stale");
+  const degTxt = els.get("snap-text").innerHTML;
+  ok(/PARTIAL REFRESH/.test(degTxt) && /agent2/.test(degTxt), "banner says partial + names vault");
   ok(els.get("retry-live").hidden === false, "retry button visible");
-  ok(bootCtx().vaults.agent2.tokens !== undefined, "agent2 falls back to snapshot shape");
+  ok(dctx.vaults.agent2.tokens !== undefined, "agent2 falls back to snapshot shape");
+  ok(dctx.vaults.treasury.sol === 54511560 / 1e9, "healthy vaults still refresh live");
 
-  // 6. Snapshot: RPC fully down -> banner with reason + retry
+  // 6. RPC fully down -> last-good snapshot kept, stale banner with reason + retry
   await scenario("snapshot", () => { rpcMode = "down"; });
-  ok(bootCtx().mode === "snapshot", "mode snapshot, got " + bootCtx().mode);
-  ok(els.get("mode-text").textContent === "SNAPSHOT", "badge SNAPSHOT");
+  const sctx = bootCtx();
+  ok(sctx.balancesError !== "", "error recorded");
+  ok(sctx.balancesAt === SNAP.snapshotTs * 1000, "timestamp stays at last good (snapshot)");
+  ok(els.get("mode-text").style.color === "var(--amber)", "badge amber");
   const snapTxt = els.get("snap-text").innerHTML;
-  ok(/SNAPSHOT MODE/.test(snapTxt) && /ET/.test(snapTxt) && !/UTC/.test(snapTxt), "banner ET, no UTC");
+  ok(/BALANCES STALE/.test(snapTxt) && /ET/.test(snapTxt) && !/UTC/.test(snapTxt), "banner stale, ET, no UTC");
   ok(/fetch failed/.test(snapTxt), "banner surfaces the RPC error");
+  ok(els.get("retry-live").hidden === false, "retry button visible");
 
   // 7. Quote feed down -> REF fallback tape, AUM on ref mark
   await scenario("quotes-down", () => { global.__jupDown = true; });
@@ -177,38 +196,34 @@ async function scenario(name, setup) {
   ok(quotesLiveCount() === 2, "partial live count, got " + quotesLiveCount());
   ok(/LIVE 2\/34/.test(els.get("tape-stocks").innerHTML), "tape shows LIVE 2/34");
 
-  // 9. Retry button re-runs the live tier
+  // 9. Manual attemptLive after recovery clears the stale banner
   await scenario("retry", () => { rpcMode = "down"; });
-  ok(bootCtx().mode === "snapshot", "pre-retry snapshot");
+  ok(bootCtx().balancesError !== "", "pre-retry stale");
   rpcMode = "ok";
   await attemptLive();
-  await new Promise((r) => setTimeout(r, 50));
-  ok(bootCtx().mode === "live", "post-retry live, got " + bootCtx().mode);
+  ok(bootCtx().balancesError === "", "post-retry fresh, got " + bootCtx().balancesError);
+  ok(els.get("snap-banner").hidden === true, "banner hidden after recovery");
 
-  // 10. Auto-retry backoff math
+  // 10. Quote-feed backoff math (unchanged tier)
   ok(quoteDelayMs(0) === 60000, "quote delay healthy 60s");
   ok(quoteDelayMs(1) === 120000, "quote delay 120s after 1 fail");
   ok(quoteDelayMs(2) === 240000, "quote delay 240s after 2 fails");
   ok(quoteDelayMs(9) === 300000, "quote delay capped 300s");
-  const b1 = rpcBackoffMs(1), b2 = rpcBackoffMs(2), b6 = rpcBackoffMs(6), b99 = rpcBackoffMs(99);
-  ok(b1 >= 8000 && b1 <= 12000, "rpc backoff ~10s, got " + b1);
-  ok(b2 >= 16000 && b2 <= 24000, "rpc backoff ~20s, got " + b2);
-  ok(b6 >= 240000 && b6 <= 300000, "rpc backoff capped ~300s, got " + b6);
-  ok(b99 <= 300000, "rpc backoff never exceeds cap");
 
-  // 11. RPC down -> failure counted, retry scheduled with backoff
+  // 11. RPC down -> flat 60s retry scheduled (no exponential backoff)
   await scenario("auto-retry", () => { rpcMode = "down"; });
-  ok(bootCtx().mode === "snapshot", "auto-retry pre snapshot");
-  ok(rpcAuto.attempts >= 1, "attempts counted, got " + rpcAuto.attempts);
+  ok(bootCtx().balancesError !== "", "auto-retry pre stale");
   ok(rpcAuto.timer !== null, "retry timer scheduled");
-  ok(rpcAuto.nextAt > Date.now(), "retry scheduled in the future");
+  const waitMs = rpcAuto.nextAt - Date.now();
+  ok(waitMs > 30_000 && waitMs <= 60_000, "retry in ~60s, got " + waitMs);
 
-  // 12. Banner RETRY LIVE click resets backoff and recovers
+  // 12. Banner RETRY LIVE click forces a refresh and recovers
   rpcMode = "ok";
   docListeners.get("click")({ target: { closest: (sel) => (sel === "#retry-live" ? {} : null) } });
-  await new Promise((r) => setTimeout(r, 100));
-  ok(bootCtx().mode === "live", "manual retry recovers, got " + bootCtx().mode);
-  ok(rpcAuto.attempts === 0, "backoff reset after success");
+  await new Promise((r) => setTimeout(r, 400)); // refreshSoon(250) timer
+  await settleRefresh();
+  ok(bootCtx().balancesError === "", "manual retry recovers, got " + bootCtx().balancesError);
+  ok(els.get("snap-banner").hidden === true, "banner hidden after manual retry");
 
   // 13. Quote feed down -> failures counted, retry scheduled
   await scenario("quote-backoff", () => { global.__jupDown = true; });
@@ -223,13 +238,15 @@ async function scenario(name, setup) {
   const fb = els.get("feed-body").innerHTML;
   ok(fb.includes('data-group="g-bounty-001"') && /feed-group open/.test(fb), "expanded group survives re-render");
 
-  // 15. Probe regression: a degraded load that dropped the treasury must not break the next probe
+  // 15. Address regression: vault addresses always come from the committed
+  // snapshot, so a mangled ctx.vaults can't break the next refresh
   await scenario("probe-regression", () => { rpcMode = "agent2-down"; });
   delete bootCtx().vaults.treasury; // simulate prior degraded load without treasury
   rpcMode = "ok";
   await attemptLive();
-  await new Promise((r) => setTimeout(r, 50));
-  ok(bootCtx().mode === "live", "probe uses snapshot PDA, got " + bootCtx().mode);
+  ok(bootCtx().vaults.treasury && bootCtx().vaults.treasury.sol === 54511560 / 1e9,
+    "treasury restored from snapshot addresses");
+  ok(bootCtx().balancesError === "", "fresh after recovery");
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
