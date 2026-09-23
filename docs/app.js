@@ -52,6 +52,38 @@ const TX_USD_VOLUME = {
 const REPO_URL = "https://github.com/swarly-agent/stocklana";
 const POLICY_URL = REPO_URL + "/blob/main/policy/allocation-policy-v1.md";
 
+/* __STOCK_QUOTES_START__ */
+// Backpack Securities listings — UNDERLYING equity reference quotes (Yahoo Finance),
+// baked 2026-09-23 12:51 ET. The onchain tokens are 1:1-backed by these shares; this tape shows the
+// reference price, not a live onchain quote.
+const STOCK_QUOTES_TS = "2026-09-23 12:51 ET";
+const STOCK_QUOTES = [
+  { sym: "SPCX", name: "SpaceX", px: 151.34, chgPct: -2.19 },
+  { sym: "MU", name: "Micron Tech", px: 1067.94, chgPct: -2.58 },
+  { sym: "SNDK", name: "SanDisk", px: 1816.81, chgPct: -3.72 },
+  { sym: "BA", name: "Boeing", px: 202.38, chgPct: 2.36 },
+  { sym: "BABA", name: "Alibaba", px: 110.78, chgPct: -4.76 },
+  { sym: "COST", name: "Costco", px: 900.2, chgPct: 0.09 },
+  { sym: "DELL", name: "Dell", px: 546.02, chgPct: -0.53 },
+  { sym: "DJT", name: "Trump Media", px: 9.07, chgPct: -3.31 },
+  { sym: "HIMS", name: "Hims & Hers", px: 29.24, chgPct: -3.91 },
+  { sym: "IBM", name: "IBM", px: 234.85, chgPct: 1.5 },
+  { sym: "JNJ", name: "Johnson & Johnson", px: 266.89, chgPct: -0.85 },
+  { sym: "LMT", name: "Lockheed Martin", px: 526.48, chgPct: 0.79 },
+  { sym: "LULU", name: "Lululemon", px: 103.24, chgPct: -0.47 },
+  { sym: "MGM", name: "MGM Resorts", px: 38.57, chgPct: -0.85 },
+  { sym: "PFE", name: "Pfizer", px: 28.07, chgPct: 0.52 },
+  { sym: "QUBT", name: "Quantum Computing", px: 9.33, chgPct: 2.72 },
+  { sym: "RBLX", name: "Roblox", px: 49.1, chgPct: -1.54 },
+  { sym: "RDDT", name: "Reddit", px: 150.79, chgPct: -3.13 },
+  { sym: "RIVN", name: "Rivian", px: 14.96, chgPct: -1.16 },
+  { sym: "SHOP", name: "Shopify", px: 142.43, chgPct: -3.59 },
+  { sym: "SNAP", name: "Snap", px: 5.31, chgPct: -5.52 },
+  { sym: "UPS", name: "UPS", px: 96.75, chgPct: 0.92 },
+  { sym: "BULL", name: "Webull", px: 7.78, chgPct: -3.83 },
+];
+/* __STOCK_QUOTES_END__ */
+
 /* ───────────────────────── rpc tier ───────────────────────── */
 
 const cache = new Map();
@@ -253,24 +285,32 @@ function totals(ctx) {
   return { usdc, spcx, sol, usd: usdc + spcx * ctx.spcxImplied };
 }
 
-function renderTape(ctx) {
+function renderTapes(ctx) {
+  // ── tape 1 · exchange AUM + holdings ──
   const tot = totals(ctx);
-  const paid = ctx.bounties.filter((b) => b.status === "paid");
-  const paidUsd = paid.reduce((s, b) => s + bountyUsd(b), 0);
-  const open = ctx.bounties.filter((b) => String(b.status).toLowerCase() !== "paid");
-  const vol = swapVolume24h(ctx);
-  const items = [
-    `<span class="k">SPCX</span> <span class="up">${fmtUsd(ctx.spcxImplied, 2)}</span> <span class="k">IMPLIED</span>`,
-    `<span class="k">TOTAL AUM</span> <span class="up">${fmtUsd(tot.usd)}</span>`,
-    `<span class="k">ACCOUNTS</span> ${["agent1", "agent2"].filter((k) => ctx.vaults[k]).length} <span class="k">AGENTS</span>`,
-    `<span class="k">24H VOL</span> <span class="up">${fmtUsd(vol.usd)}</span> <span class="k">· ${vol.n} SWAPS</span>`,
-    `<span class="k">BOUNTIES</span> <span class="up">${paid.length}/${ctx.bounties.length} PAID</span>`,
-    `<span class="k">OPEN</span> ${open.length} <span class="k">·</span> <span class="up">${fmtUsd(paidUsd)}</span> <span class="k">PAID OUT</span>`,
-    `<span class="k">VESTING</span> ${ctx.vesting.length} ACTIVE <span class="k">· 90D LIN / 7D CLIFF</span>`,
-    `<span class="k">POLICY</span> 70/30 <span class="k">· +10% MATCH · −2% FEE</span>`,
+  const spcxUsd = tot.spcx * ctx.spcxImplied;
+  const aumItems = [
+    `<span class="k">TOTAL AUM</span> <span class="up"><b>${fmtUsd(tot.usd)}</b></span>`,
+    `<span class="k">USDC</span> ${fmtTok(tot.usdc, 2)} <span class="k">·</span> <span class="up">${fmtUsd(tot.usdc)}</span>`,
+    `<span class="k">SPCX</span> ${fmtTok(tot.spcx)} <span class="k">@</span> ${fmtUsd(ctx.spcxImplied)} <span class="k">·</span> <span class="up">${fmtUsd(spcxUsd)}</span>`,
+    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, ctx.spcxImplied))}</span>`,
+    `<span class="k">AGENT-1</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent1 ?? {}, ctx.spcxImplied))}</span>`,
+    `<span class="k">AGENT-2</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.agent2 ?? {}, ctx.spcxImplied))}</span>`,
   ];
-  const half = items.map((i) => `<span class="tape-item">${i}<span class="sep">///</span></span>`).join("");
-  $("tape-track").innerHTML = half + half; // duplicated for seamless loop
+  const aumHalf = aumItems.map((i) => `<span class="tape-item">${i}<span class="sep">///</span></span>`).join("");
+  $("tape-aum").innerHTML = aumHalf + aumHalf; // duplicated for seamless loop
+
+  // ── tape 2 · Backpack Securities listings, underlying reference quotes ──
+  const refItem = `<span class="tape-item"><span class="k">UNDERLYING REF · ${esc(STOCK_QUOTES_TS)}</span><span class="sep">///</span></span>`;
+  const qItems = STOCK_QUOTES.map((q) => {
+    const cls = q.chgPct >= 0 ? "up" : "down";
+    const arrow = q.chgPct >= 0 ? "▲" : "▼";
+    return `<span class="tape-item" title="${esc(q.name)} — underlying reference, not an onchain quote">` +
+      `<span class="k">${esc(q.sym)}</span> ${fmtUsd(q.px)} ` +
+      `<span class="${cls}">${arrow} ${Math.abs(q.chgPct).toFixed(2)}%</span><span class="sep">///</span></span>`;
+  }).join("");
+  const stockHalf = refItem + qItems;
+  $("tape-stocks").innerHTML = stockHalf + stockHalf;
 }
 
 function swapVolume24h(ctx) {
@@ -725,6 +765,20 @@ document.addEventListener("click", (e) => {
     }
     return;
   }
+  // view tabs
+  const tab = e.target.closest("[data-tab]");
+  if (tab) {
+    const name = tab.getAttribute("data-tab");
+    document.querySelectorAll(".tab").forEach((b) => {
+      const on = b === tab;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll(".tabpanel").forEach((p) => {
+      p.hidden = p.id !== "panel-" + name;
+    });
+    return;
+  }
   // feed filter chips
   const chip = e.target.closest("[data-feed-filter]");
   if (chip) {
@@ -821,7 +875,7 @@ async function boot() {
   }
 
   setMode(ctx.mode, ctx.ts);
-  renderTape(ctx);
+  renderTapes(ctx);
   renderOverview(ctx);
   renderAgents(ctx);
   renderFeed(ctx);
