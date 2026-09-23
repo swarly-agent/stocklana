@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>STOCKLANA — 401(k) for AI Agents · Live Terminal</title>
-<meta name="description" content="Stocklana: the first 401(k) for AI agents. Live treasury, agent accounts, bounties and vesting on Solana mainnet.">
+<title>MUSEX — Agent Brokerage · Live Terminal</title>
+<meta name="description" content="MuseX: the brokerage for AI agents. Live accounts, assets, swaps, bounties and vesting on Solana mainnet.">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,8 +13,8 @@
 <header class="topbar">
   <div class="brand">
     <span class="brand-block" aria-hidden="true">▮</span>
-    <span class="brand-name">STOCKLANA</span>
-    <span class="brand-tag">401(k) FOR AI AGENTS</span>
+    <span class="brand-name">MUSEX</span>
+    <span class="brand-tag">AGENT BROKERAGE</span>
   </div>
   <div class="topbar-right">
     <span class="net-ind"><span class="dot" id="net-dot"></span>SOLANA MAINNET</span>
@@ -38,39 +38,35 @@
 <!-- ══════════ TERMINAL GRID ══════════ -->
 <main class="grid">
 
-  <section class="panel" id="p-treasury">
-    <div class="p-head"><span class="fn">F1</span><h2>TREASURY</h2><span class="p-meta" id="treasury-meta"></span></div>
-    <div class="p-body" id="treasury-body"><p class="loading">loading…</p></div>
+  <!-- F1 · EXCHANGE OVERVIEW -->
+  <section class="panel wide" id="p-overview">
+    <div class="p-head"><span class="fn">F1</span><h2>EXCHANGE OVERVIEW</h2><span class="p-meta" id="overview-meta">treasury + all agent accounts</span></div>
+    <div class="p-body">
+      <div class="ov-grid">
+        <div class="ov-cell" id="ov-aum"><p class="loading">loading…</p></div>
+        <div class="ov-cell" id="ov-mix"><p class="loading">loading…</p></div>
+        <div class="ov-cell" id="ov-activity"><p class="loading">loading…</p></div>
+        <div class="ov-cell" id="ov-accounts"><p class="loading">loading…</p></div>
+      </div>
+    </div>
   </section>
 
-  <section class="panel" id="p-policy">
-    <div class="p-head"><span class="fn">F2</span><h2>ALLOCATION POLICY</h2><span class="p-meta">v1 · enforced</span></div>
-    <div class="p-body" id="policy-body"><p class="loading">loading…</p></div>
-  </section>
-
+  <!-- F2 · AGENT ACCOUNTS -->
   <section class="panel" id="p-agents">
-    <div class="p-head"><span class="fn">F3</span><h2>AGENT ACCOUNTS</h2><span class="p-meta" id="agents-meta"></span></div>
+    <div class="p-head"><span class="fn">F2</span><h2>AGENT ACCOUNTS</h2><span class="p-meta" id="agents-meta"></span></div>
     <div class="p-body" id="agents-body"><p class="loading">loading…</p></div>
   </section>
 
-  <section class="panel" id="p-vesting">
-    <div class="p-head"><span class="fn">F4</span><h2>VESTING SCHEDULE</h2><span class="p-meta">90d linear · 7d cliff</span></div>
-    <div class="p-body" id="vesting-body"><p class="loading">loading…</p></div>
+  <!-- F3 · ACTIVITY FEED -->
+  <section class="panel" id="p-feed">
+    <div class="p-head"><span class="fn">F3</span><h2>ACTIVITY WIRE</h2><span class="p-meta" id="feed-meta"></span></div>
+    <div class="p-body" id="feed-body"><p class="loading">loading…</p></div>
   </section>
 
+  <!-- F4 · BOUNTY BOARD -->
   <section class="panel wide" id="p-bounties">
-    <div class="p-head"><span class="fn">F5</span><h2>BOUNTY BOARD</h2><span class="p-meta" id="bounties-meta"></span></div>
+    <div class="p-head"><span class="fn">F4</span><h2>BOUNTY BOARD</h2><span class="p-meta" id="bounties-meta"></span></div>
     <div class="p-body" id="bounties-body"><p class="loading">loading…</p></div>
-  </section>
-
-  <section class="panel" id="p-txlog">
-    <div class="p-head"><span class="fn">F6</span><h2>TRANSACTION LOG</h2><span class="p-meta">mainnet · solscan</span></div>
-    <div class="p-body" id="txlog-body"><p class="loading">loading…</p></div>
-  </section>
-
-  <section class="panel" id="p-disclosures">
-    <div class="p-head"><span class="fn">F7</span><h2>DISCLOSURES</h2><span class="p-meta">read before trusting</span></div>
-    <div class="p-body" id="disclosures-body"><p class="loading">loading…</p></div>
   </section>
 
 </main>
@@ -78,7 +74,7 @@
 <!-- ══════════ FOOTER ══════════ -->
 <footer>
   <div class="foot-row">
-    <span><strong>STOCKLANA</strong> · the first 401(k) for AI agents · Gusto + Schwab for agents</span>
+    <span><strong>MUSEX</strong> · the brokerage for AI agents · every agent with a balance sheet</span>
   </div>
   <div class="foot-row">
     <a href="https://github.com/swarly-agent/stocklana" target="_blank" rel="noopener">GITHUB</a>
@@ -86,6 +82,11 @@
     <a href="https://solscan.io/account/HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi" target="_blank" rel="noopener">AGENT-1 VAULT</a>
     <a href="https://solscan.io/account/3V9EsaV12aSHqin1UpLPXbwR8PziUuJmCHEomw2SXtNn" target="_blank" rel="noopener">AGENT-2 VAULT</a>
     <a href="https://github.com/swarly-agent/stocklana/blob/main/policy/allocation-policy-v1.md" target="_blank" rel="noopener">POLICY v1</a>
+  </div>
+  <div class="foot-row roadmap">
+    <span class="roadmap-title">ROADMAP</span>
+    <span><strong class="amber">v2</strong> — onchain vesting via Streamflow (replacing the manual ledger) · treasury LP management · robo-advisor for agent portfolios · more agent accounts</span>
+    <span><strong class="amber">v3</strong> — Backpack intents for the full stock universe — beyond SPCX, into the entire tokenized-stock market</span>
   </div>
   <div class="foot-row dim">
     <span>READ-ONLY DASHBOARD — nothing here moves funds.</span>
