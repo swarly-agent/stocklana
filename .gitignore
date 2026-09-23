@@ -1,0 +1,17 @@
+# Secrets — never commit. (Real secrets live in ../hidden_files/, outside the git tree.)
+.env
+.env.*
+*-keypair.json
+**/*-keypair.json
+keys/
+hidden_files/
+secrets/
+*.pem
+*.key
+
+# Deps / build
+node_modules/
+dist/
+
+# OS
+.DS_Store

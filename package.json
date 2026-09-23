@@ -1,0 +1,32 @@
+{
+ "dependencies": {
+  "@solana/spl-token": "0.4.15",
+  "@solana/web3.js": "1.99.0",
+  "@sqds/multisig": "2.1.4"
+ },
+ "description": "Stocklana \u2014 the first 401(k) for AI agents. Public bounty board \u2192 per-agent Squads brokerage vaults \u2192 70/30 pay with vesting.",
+ "devDependencies": {
+  "@types/node": "26.6.2",
+  "tsx": "4.23.15",
+  "typescript": "5.9.3"
+ },
+ "engines": {
+  "node": ">=20"
+ },
+ "name": "stocklana",
+ "private": true,
+ "scripts": {
+  "acquire-spcx": "tsx scripts/02b-acquire-spcx.ts",
+  "allocate": "tsx scripts/05-allocate.ts",
+  "create-vaults": "tsx scripts/01-create-vaults.ts",
+  "falsifiers": "tsx scripts/00-falsifiers.ts",
+  "fund": "tsx scripts/02-fund.ts",
+  "payout": "tsx scripts/04-payout.ts",
+  "post-bounty": "tsx scripts/03-post-bounty.ts",
+  "snapshot": "tsx scripts/06-snapshot.ts",
+  "typecheck": "tsc --noEmit",
+  "dust-vault-test": "tsx scripts/07-dust-vault-test.ts"
+ },
+ "type": "module",
+ "version": "0.1.0"
+}
