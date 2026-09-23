@@ -28,7 +28,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { KEYS_DIR, MINTS, PUBLIC_RPC_ENDPOINTS } from "./config.js";
-import { pub } from "./safe-log.js";
+import { pub, sig } from "./safe-log.js";
 
 export const SQUADS_PROGRAM_ID = multisig.PROGRAM_ID;
 
@@ -177,7 +177,11 @@ export async function readMultisigState(
   if (!info.data.subarray(0, 8).equals(disc)) {
     throw new Error(`not a Squads multisig account: ${multisigPda.toBase58()}`);
   }
-  const [state] = multisig.accounts.multisigBeet.deserialize(info.data.subarray(8));
+  // NOTE (2026-09-23 bug): multisigBeet's first field IS the 8-byte
+  // accountDiscriminator — do NOT strip it before deserialize (that shifts
+  // every field and dies in a COption assert). The explicit check above is
+  // just a friendlier error.
+  const [state] = multisig.accounts.multisigBeet.deserialize(info.data);
   return {
     transactionIndex: BigInt(state.transactionIndex as unknown as string),
     threshold: Number(state.threshold),
@@ -201,6 +205,8 @@ export interface SimResult {
   ok: boolean;
   unitsConsumed?: number;
   err?: string;
+  /** Program logs from the simulation — the fastest way to decode a Custom(n). */
+  logs?: string[];
 }
 
 /** Simulate an unsigned VersionedTransaction. Never sends. */
@@ -211,7 +217,11 @@ export async function simulateOnly(
   try {
     const res = await connection.simulateTransaction(tx, { commitment: "confirmed" });
     if (res.value.err) {
-      return { ok: false, err: JSON.stringify(res.value.err).slice(0, 500) };
+      return {
+        ok: false,
+        err: JSON.stringify(res.value.err).slice(0, 500),
+        logs: res.value.logs ?? undefined,
+      };
     }
     return { ok: true, unitsConsumed: res.value.unitsConsumed ?? undefined };
   } catch (e) {
@@ -245,7 +255,41 @@ export interface SendResult {
 }
 
 /**
- * Two-phase send: simulate with a generous budget, then rebuild at
+ * Polling confirmation (added 2026-09-23): this machine's egress proxy
+ * breaks websocket subscriptions, so Connection.confirmTransaction always
+ * times out even when the transaction lands. Poll getSignatureStatuses
+ * instead. Throws on onchain failure; on timeout the tx state is UNKNOWN —
+ * callers must check the signature before retrying a create.
+ */
+export async function confirmSignature(
+  connection: Connection,
+  signature: string,
+  label: string,
+  timeoutMs = 90_000,
+): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    const res = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const st = res.value[0];
+    if (st?.err) {
+      throw new Error(`[${label}] transaction failed onchain: ${JSON.stringify(st.err)}`);
+    }
+    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) {
+      return;
+    }
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(
+        `[${label}] not confirmed in ${timeoutMs / 1000}s — check signature ${signature}; ` +
+          `it may still land (do NOT blindly retry creates).`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
+/** Two-phase send: simulate with a generous budget, then rebuild at
  * 1.2× consumed (capped at 1.4M — never hardcoded per-tx). In dry-run,
  * prints everything and sends nothing.
  */
@@ -282,14 +326,14 @@ export async function sendWithSizing(
   }
 
   tx.sign(signers);
-  const sig = await connection.sendRawTransaction(tx.serialize(), {
+  const signature = await connection.sendRawTransaction(tx.serialize(), {
     skipPreflight: false,
     preflightCommitment: "confirmed",
   });
-  pub(`[${opts.label}] sent`, sig);
-  await connection.confirmTransaction(sig, "confirmed");
-  pub(`[${opts.label}] confirmed`, sig);
-  return { signature: sig, unitsConsumed: sim.unitsConsumed ?? null, computeUnitsUsed: units };
+  sig(`[${opts.label}] sent`, signature);
+  await confirmSignature(connection, signature, opts.label);
+  sig(`[${opts.label}] confirmed`, signature);
+  return { signature, unitsConsumed: sim.unitsConsumed ?? null, computeUnitsUsed: units };
 }
 
 // ------------------------------------------- propose → approve → execute
@@ -371,6 +415,8 @@ export async function squadsProposeApproveExecute(
           console.log(`[${label}] index ${idx} taken by another transaction — refetching`);
           continue; // retry with a fresh index
         }
+        console.error(`[${label}] batch simulation logs:`);
+        for (const l of sim.logs ?? []) console.error(`    ${l}`);
         throw new Error(`[${label}] batch simulation failed (index ${idx} not taken): ${sim.err}`);
       }
     }
@@ -407,7 +453,29 @@ export async function squadsProposeApproveExecute(
       { label: `${label}/execute`, dryRun: false, defaultUnits: 1_000_000, luts: lookupTableAccounts },
     );
     void vaultPda;
-    return { transactionIndex: idx, batchSignature: batch.signature, executeSignature: exec.signature };
+    const result = { transactionIndex: idx, batchSignature: batch.signature, executeSignature: exec.signature };
+
+    // Rent reclaim (2026-09-23): every Squads proposal locks ~0.002-0.004 SOL
+    // in the transaction + proposal PDAs. With ~10 proposals in the demo loop
+    // that would strand the whole budget, so close them right after execution.
+    // vaultTransactionAccountsClose is a DIRECT program ix (no proposal
+    // needed); rentCollector need not sign. Best-effort: the money moved.
+    try {
+      const closeIx = multisig.instructions.vaultTransactionAccountsClose({
+        multisigPda,
+        rentCollector: member,
+        transactionIndex: idx,
+      });
+      const closed = await sendWithSizing(connection, [closeIx], member, [memberKp], {
+        label: `${label}/close`,
+        dryRun: false,
+        defaultUnits: 100_000,
+      });
+      if (closed.signature) sig(`[${label}] proposal rent reclaimed`, closed.signature);
+    } catch (e) {
+      console.error(`[${label}] WARNING: rent reclaim failed (PDAs stranded): ${(e as Error).message}`);
+    }
+    return result;
   }
   throw new Error(`[${label}] transactionIndex collision on 3 attempts — aborting`);
 }

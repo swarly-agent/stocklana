@@ -41,6 +41,7 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  createTransferCheckedInstruction,
   createTransferInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
@@ -66,7 +67,7 @@ import {
   loadOrGenerateKeypair,
   squadsProposeApproveExecute,
 } from "../lib/squads.js";
-import { pub } from "../lib/safe-log.js";
+import { pub, sig } from "../lib/safe-log.js";
 
 const DRY_RUN = !process.argv.includes("--live");
 const CONFIRMED = process.argv.includes("--i-confirm");
@@ -76,6 +77,7 @@ const REPO_ROOT = path.join(import.meta.dirname ?? ".", "..");
 const VAULTS_JSON = path.join(REPO_ROOT, "data", "vaults.json");
 const LEDGER_JSON = path.join(REPO_ROOT, "data", "vesting-ledger.json");
 const AGENTS_JSON = path.join(REPO_ROOT, "data", "agents.json");
+const BOUNTIES_JSON = path.join(REPO_ROOT, "data", "bounties.json");
 
 const BOUNTY_USD_MAP: Record<string, number> = {
   "bounty-001": BOUNTY_USD.ONE,
@@ -157,6 +159,7 @@ async function main(): Promise<void> {
 
   // Inventory check: treasury vault must hold principal + match.
   const spcxMint = new PublicKey(MINTS.SPCX);
+  const SPCX_DECIMALS = 6; // verified onchain 2026-09-23 (token balance read)
   const treasurySpcxAta = ataFor(spcxMint, treasuryVault, TOKEN_2022);
   // A failed read aborts via getTokenBalance — inventory must never silently read 0.
   const inventory = (await getTokenBalance(connection, treasurySpcxAta)) ?? 0n;
@@ -166,10 +169,12 @@ async function main(): Promise<void> {
     throw new Error("treasury SPCX inventory short — re-run 02b-acquire-spcx --live (or top up) before paying out");
   }
 
-  // Agent hot wallet (fresh script-held keypair, disclosed; prod: agent-held).
+  // Agent hot wallet (script-held keypair, disclosed; prod: agent-held).
+  // PERSISTED — it receives the agent's USDC; losing it strands funds
+  // (2026-09-23 lesson: never save=false on a key that receives value).
   const hot = DRY_RUN
     ? { kp: Keypair.generate(), generated: true }
-    : loadOrGenerateKeypair("agent1-hot-keypair.json", false);
+    : loadOrGenerateKeypair("agent1-hot-keypair.json");
   pub("agent hot wallet", hot.kp.publicKey.toBase58());
 
   const usdcMint = new PublicKey(MINTS.USDC);
@@ -206,16 +211,22 @@ async function main(): Promise<void> {
   );
 
   // Leg 2: SPCX principal → agent vault.
+  // SPCX is Token-2022 and REQUIRES transfer_checked (plain transfer fails
+  // with "use transfer_checked or transfer_checked_with_fee", 2026-09-23).
   const leg2: TransactionInstruction[] = [];
   const a1SpcxIx = await getOrCreateAtaIx(connection, treasuryVault, spcxMint, agentVaultPda, TOKEN_2022);
   if (a1SpcxIx) leg2.push(a1SpcxIx);
   leg2.push(
-    createTransferInstruction(treasurySpcxAta, agentSpcxAta, treasuryVault, spcxPrincipal, [], TOKEN_2022),
+    createTransferCheckedInstruction(
+      treasurySpcxAta, spcxMint, agentSpcxAta, treasuryVault, spcxPrincipal, SPCX_DECIMALS, [], TOKEN_2022,
+    ),
   );
 
   // Leg 3: SPCX match → agent vault (separate transfer so the ledger shows it).
   const leg3: TransactionInstruction[] = [
-    createTransferInstruction(treasurySpcxAta, agentSpcxAta, treasuryVault, spcxMatch, [], TOKEN_2022),
+    createTransferCheckedInstruction(
+      treasurySpcxAta, spcxMint, agentSpcxAta, treasuryVault, spcxMatch, SPCX_DECIMALS, [], TOKEN_2022,
+    ),
   ];
 
   const legs: [string, TransactionInstruction[]][] = [
@@ -223,8 +234,14 @@ async function main(): Promise<void> {
     [`04-payout/${BOUNTY_ID}/vest`, leg2],
     [`04-payout/${BOUNTY_ID}/match`, leg3],
   ];
+  // Resume support (2026-09-23): if a previous run completed some legs and
+  // died, re-run with --from-leg=vest|match to skip the legs that already
+  // executed. Never re-sends a completed leg — double-pay protection.
+  const FROM_LEG = process.argv.find((a) => a.startsWith("--from-leg="))?.split("=")[1];
+  const startIdx = FROM_LEG ? legs.findIndex(([l]) => l.endsWith(`/${FROM_LEG}`)) : 0;
+  if (FROM_LEG && startIdx < 0) throw new Error(`--from-leg=${FROM_LEG} not a leg (usdc|vest|match)`);
   const sigs: Record<string, string | null> = {};
-  for (const [label, ixs] of legs) {
+  for (const [label, ixs] of legs.slice(startIdx)) {
     const r = await squadsProposeApproveExecute({
       connection,
       multisigPda,
@@ -236,7 +253,7 @@ async function main(): Promise<void> {
       dryRun: DRY_RUN,
     });
     sigs[label] = r.executeSignature;
-    if (r.executeSignature) pub(`${label} execute sig`, r.executeSignature);
+    if (r.executeSignature) sig(`${label} execute sig`, r.executeSignature);
   }
 
   // Vesting-ledger row (amounts in SPCX token units; USD kept alongside).
@@ -285,6 +302,17 @@ async function main(): Promise<void> {
     a1.hotWallet = hot.kp.publicKey.toBase58();
     fs.writeFileSync(AGENTS_JSON, JSON.stringify(agents, null, 2) + "\n");
     console.log("upserted agent-1 hotWallet in data/agents.json");
+  }
+  // Mark the bounty row paid (public board state).
+  const bountiesDoc = JSON.parse(fs.readFileSync(BOUNTIES_JSON, "utf8")) as {
+    bounties: { id: string; status: string; payoutTx: string | null }[];
+  };
+  const brow = bountiesDoc.bounties.find((b) => b.id === BOUNTY_ID);
+  if (brow) {
+    brow.status = "paid";
+    brow.payoutTx = sigs[`04-payout/${BOUNTY_ID}/usdc`] ?? null;
+    fs.writeFileSync(BOUNTIES_JSON, JSON.stringify(bountiesDoc, null, 2) + "\n");
+    console.log(`marked ${BOUNTY_ID} paid in data/bounties.json`);
   }
   console.log("[04-payout] done.");
 }

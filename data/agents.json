@@ -1,1 +1,18 @@
-{"agents":[]}
+{
+  "agents": [
+    {
+      "id": "agent-1",
+      "label": "Swarly (demo worker)",
+      "vault": "HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi",
+      "hotWallet": "AHBX3c5o2jKkuqc2V5nzYPrreUC66BuK55WemM74XMvy",
+      "createdTx": ""
+    },
+    {
+      "id": "agent-2",
+      "label": "Second demo agent (repeatability proof)",
+      "vault": "3V9EsaV12aSHqin1UpLPXbwR8PziUuJmCHEomw2SXtNn",
+      "hotWallet": "",
+      "createdTx": ""
+    }
+  ]
+}

@@ -8,11 +8,22 @@
  *
  *  FUND THE VAULT PDA, never the multisig account.
  *
+ *  NOTE on the `treasury` instruction arg (fixed 2026-09-23): it is the
+ *  Squads PROGRAM's fee treasury (ProgramConfig.treasury, the recipient of
+ *  the multisigCreationFee) — NOT the new vault PDA. Passing the vault PDA
+ *  fails simulation with program error 6014 (InvalidAccount). The vault PDA
+ *  is derived off-chain via getVaultPda and is only used for funding.
+ *
  *  Key custody (all in KEYS_DIR, outside the git tree, 0600):
  *    treasury-keypair.json      — the funded project wallet (creator + fee payer; must exist)
- *    squads-member-keypair.json — script-held treasury member (generated if missing)
- *    agent1/agent2-keypair.json — script-held agent vault members (generated if missing)
- *    <name>-create-key.json     — fresh createKey per vault (PDA seed; pubkey also in vaults.json)
+ *    squads-member-keypair.json — script-held treasury member (generated once, PERSISTED —
+ *                                 the script must sign treasury proposals after exit)
+ *    agent1/agent2-keypair.json — script-held agent vault members (generated once, persisted)
+ *    <name>-create-key.json     — createKey per vault, persisted (PDA seed; pubkey also in vaults.json).
+ *                                 2026-09-23 lesson: these MUST persist — an earlier run passed
+ *                                 save=false, the process exited, the member key was lost, and the
+ *                                 onchain treasury multisig it created became operator-unusable
+ *                                 (abandoned; 0.0016 SOL rent stranded, recoverable by Sting as member).
  *  Sting's member pubkey comes from STING_MEMBER_PUBKEY env (lib/config.ts);
  *  the real run refuses while it is empty — he keeps the private key.
  *
@@ -45,7 +56,7 @@ import {
   loadOrGenerateKeypair,
   sendWithSizing,
 } from "../lib/squads.js";
-import { pub } from "../lib/safe-log.js";
+import { pub, sig } from "../lib/safe-log.js";
 
 const DRY_RUN = !process.argv.includes("--live");
 
@@ -117,16 +128,30 @@ async function main(): Promise<void> {
 
   const connection = await getConnection();
 
+  // Squads program config: the `treasury` arg of multisigCreateV2 is the
+  // PROGRAM's fee treasury (creation-fee recipient), read onchain.
+  const [configPda] = multisig.getProgramConfigPda({});
+  const programConfig = await multisig.accounts.ProgramConfig.fromAccountAddress(
+    connection,
+    configPda,
+  );
+  const creationFee = BigInt(programConfig.multisigCreationFee.toString());
+  const programTreasury = programConfig.treasury as PublicKey;
+  console.log(
+    `[01-create-vaults] program config: multisigCreationFee=${creationFee} lamports, ` +
+      `fee treasury=${programTreasury.toBase58()}`,
+  );
+
   // Member keypairs: generate on the real run, ephemeral placeholders on dry-run.
   const memberKp = DRY_RUN
     ? { kp: Keypair.generate(), generated: true }
-    : loadOrGenerateKeypair("squads-member-keypair.json", false);
+    : loadOrGenerateKeypair("squads-member-keypair.json");
   const agent1Kp = DRY_RUN
     ? { kp: Keypair.generate(), generated: true }
-    : loadOrGenerateKeypair("agent1-keypair.json", false);
+    : loadOrGenerateKeypair("agent1-keypair.json");
   const agent2Kp = DRY_RUN
     ? { kp: Keypair.generate(), generated: true }
-    : loadOrGenerateKeypair("agent2-keypair.json", false);
+    : loadOrGenerateKeypair("agent2-keypair.json");
 
   const plans = buildPlan(memberKp.kp.publicKey, sting, [
     agent1Kp.kp.publicKey,
@@ -137,12 +162,32 @@ async function main(): Promise<void> {
   const fullPerms = multisig.types.Permissions.all();
 
   for (const plan of plans) {
-    const createKey = DRY_RUN ? Keypair.generate() : loadOrGenerateKeypair(`${plan.name}-create-key.json`, false).kp;
+    const createKey = DRY_RUN ? Keypair.generate() : loadOrGenerateKeypair(`${plan.name}-create-key.json`).kp;
     const [multisigPda] = multisig.getMultisigPda({ createKey: createKey.publicKey });
     const [vaultPda] = multisig.getVaultPda({ multisigPda, index: 0 });
 
+    // Resume-safe: a previous run may have landed the create but died before
+    // writing vaults.json (2026-09-23: websocket confirmations always time out
+    // in this environment — the tx still landed). Never re-create an existing
+    // multisig; just re-record its addresses.
+    if (!DRY_RUN) {
+      const existing = await connection.getAccountInfo(multisigPda);
+      if (existing) {
+        console.log(`\n--- vault: ${plan.name} — multisig already exists onchain, skipping create`);
+        pub("multisigPda", multisigPda.toBase58());
+        pub("vaultPda (FUND THIS)", vaultPda.toBase58());
+        out[plan.name] = {
+          multisigPda: multisigPda.toBase58(),
+          vaultPda: vaultPda.toBase58(),
+          createKey: createKey.publicKey.toBase58(),
+        };
+        continue;
+      }
+    }
+
     const ix = multisig.instructions.multisigCreateV2({
-      treasury: vaultPda, // index-0 vault PDA — fund THIS, never the multisig account
+      // `treasury` = Squads program fee treasury (NOT the vault PDA — see header note).
+      treasury: programTreasury,
       creator: creatorKp.publicKey,
       multisigPda,
       configAuthority: null,
@@ -172,7 +217,7 @@ async function main(): Promise<void> {
       [creatorKp, createKey],
       { label: `01/${plan.name}`, dryRun: DRY_RUN, defaultUnits: 300_000 },
     );
-    if (res.signature) pub("multisigCreateV2 sig", res.signature);
+    if (res.signature) sig("multisigCreateV2 sig", res.signature);
 
     out[plan.name] = {
       multisigPda: multisigPda.toBase58(),

@@ -1,0 +1,18 @@
+{
+  "treasury": {
+    "multisigPda": "4QBhBYPp8y6Mcw7UtycvG4ACuR6ThyMe97SEv87Wiy5m",
+    "vaultPda": "Bjv8VJdAZqtYW3cz5nfNEnVZx2WwWMA1quqgPRGVQMTp",
+    "createKey": "CEUgyw8H6X9nZuS9endTDfYJrH8cEr2HXAU6BYG5dryc"
+  },
+  "agent1": {
+    "multisigPda": "HMnBxSuF5zVLaPUc7jNptbYSAYTfRw1jzBACRqNzkNde",
+    "vaultPda": "HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi",
+    "createKey": "2Pus657PMcBUwDah7ckJigNXrpx7zsxWJmocoqZdUBut"
+  },
+  "agent2": {
+    "multisigPda": "8pMe5k6pBeQsJrm96TT6bSY4x7rsnDuA1stSy3RY2qyJ",
+    "vaultPda": "3V9EsaV12aSHqin1UpLPXbwR8PziUuJmCHEomw2SXtNn",
+    "createKey": "FPan4wQWviLsNrZKKyx8EnS7NDWVuSsbh17ACzD3HcKm"
+  },
+  "createdTs": 1790135671
+}

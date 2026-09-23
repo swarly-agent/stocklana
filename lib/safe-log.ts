@@ -26,3 +26,19 @@ export function pub(label: string, value: string): void {
 export function isSafeToPrint(value: string): boolean {
   return !looksLikeSecret(value);
 }
+
+const B58_SIG = /^[1-9A-HJ-NP-Za-km-z]{87,88}$/;
+
+/**
+ * Print a transaction signature. A signature is public by construction — it
+ * only exists after the transaction is sent — so the CALLER declares the
+ * value is a signature, which is what distinguishes it from a same-shaped
+ * (64-byte base58) secret key. Rejects anything not signature-shaped.
+ * Use this for every signature; never pass one to pub().
+ */
+export function sig(label: string, value: string): void {
+  if (!B58_SIG.test(value)) {
+    throw new Error(`refusing to print non-signature-shaped value for "${label}"`);
+  }
+  console.log(`${label}: ${value}`);
+}

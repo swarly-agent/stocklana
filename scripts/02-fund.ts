@@ -47,7 +47,7 @@ import {
   loadKeypair,
   sendWithSizing,
 } from "../lib/squads.js";
-import { pub } from "../lib/safe-log.js";
+import { pub, sig } from "../lib/safe-log.js";
 
 const DRY_RUN = !process.argv.includes("--live");
 
@@ -193,7 +193,7 @@ async function main(): Promise<void> {
       dryRun: DRY_RUN,
       defaultUnits: 300_000,
     });
-    if (r.signature) pub("02-fund atas+usdc sig", r.signature);
+    if (r.signature) sig("02-fund atas+usdc sig", r.signature);
   }
 
   console.log(`[02-fund] ${DRY_RUN ? "DRY-RUN complete — nothing sent." : "done."}`);

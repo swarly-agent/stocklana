@@ -55,7 +55,7 @@ import {
   sendWithSizing,
   squadsProposeApproveExecute,
 } from "../lib/squads.js";
-import { pub } from "../lib/safe-log.js";
+import { pub, sig } from "../lib/safe-log.js";
 
 const DRY_RUN = !process.argv.includes("--live");
 const AMOUNT_USD = Number(process.argv.find((a) => a.startsWith("--amount="))?.split("=")[1] ?? "5");
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
     dryRun: DRY_RUN,
     defaultUnits: 200_000,
   });
-  if (fund.signature) pub("fund sig", fund.signature);
+  if (fund.signature) sig("fund sig", fund.signature);
 
   // ---- step 2: policy-validated USDC→SPCX swap inside the vault ------------
   const amountAtomic = String(Math.round(AMOUNT_USD * 1_000_000));
@@ -214,8 +214,8 @@ async function main(): Promise<void> {
     label: "05-allocate/swap",
     dryRun: DRY_RUN,
   });
-  if (exec.batchSignature) pub("batch sig", exec.batchSignature);
-  if (exec.executeSignature) pub("execute sig", exec.executeSignature);
+  if (exec.batchSignature) sig("batch sig", exec.batchSignature);
+  if (exec.executeSignature) sig("execute sig", exec.executeSignature);
 
   console.log(`[05-allocate] ${DRY_RUN ? "DRY-RUN complete — nothing sent." : "done."}`);
 }

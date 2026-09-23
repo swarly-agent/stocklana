@@ -36,7 +36,7 @@ import {
   loadKeypair,
   squadsProposeApproveExecute,
 } from "../lib/squads.js";
-import { pub } from "../lib/safe-log.js";
+import { pub, sig } from "../lib/safe-log.js";
 
 const DRY_RUN = !process.argv.includes("--live");
 
@@ -126,8 +126,8 @@ async function main(): Promise<void> {
   });
 
   console.log(`transactionIndex=${exec.transactionIndex}`);
-  if (exec.batchSignature) pub("batch (create+propose+approve) sig", exec.batchSignature);
-  if (exec.executeSignature) pub("execute sig", exec.executeSignature);
+  if (exec.batchSignature) sig("batch (create+propose+approve) sig", exec.batchSignature);
+  if (exec.executeSignature) sig("execute sig", exec.executeSignature);
   console.log(
     `[02b-acquire-spcx] ${DRY_RUN ? "DRY-RUN complete — nothing sent." : `done — treasury holds ~${spcxOut.toFixed(6)} SPCX more. 04-payout draws vested slices from this inventory.`}`,
   );

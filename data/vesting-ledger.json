@@ -1,1 +1,42 @@
-{"schedules":[]}
+{
+  "schedules": [
+    {
+      "id": "vest-bounty-001",
+      "agent": "agent-1",
+      "vault": "HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi",
+      "mint": "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
+      "principalAmount": "0.038077",
+      "principalUsd": 5.88,
+      "matchAmount": "0.003807",
+      "matchUsd": 0.588,
+      "matchRateBps": 1000,
+      "feeBps": 200,
+      "startTs": 1790138305,
+      "cliffDays": 7,
+      "durationDays": 90,
+      "status": "active",
+      "fundingTx": "3guEeSeesk9Q1vKuh3pVwwruhPztfZijmnz1TwtuJhEbxeEu5dmqrXE9HLqJCTVcm74GBtqe3z2C7BLRvR6gvqky",
+      "matchTx": "3SdCktwhLj4BLFXDMCz5Z57C4ASdFc5VULwxb48dwQXtR7cWKr7kZvJmWmi9txKMp1keQzXBf2Lo3W6jpkqNWcgm",
+      "enforcement": "ledger-manual — disclosed, not a program"
+    },
+    {
+      "id": "vest-bounty-002",
+      "agent": "agent-1",
+      "vault": "HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi",
+      "mint": "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
+      "principalAmount": "0.019043",
+      "principalUsd": 2.94,
+      "matchAmount": "0.001904",
+      "matchUsd": 0.294,
+      "matchRateBps": 1000,
+      "feeBps": 200,
+      "startTs": 1790138351,
+      "cliffDays": 7,
+      "durationDays": 90,
+      "status": "active",
+      "fundingTx": "3ZQk6HnsZCXbGPY2CPwaDuArnaDHk3whK4FQL8Jo2tzuvP6VTQkMSumxSgKZAXf6LRoUAWuqBhZ7UiqeopKHHhkc",
+      "matchTx": "RXqzT629U7wFkqskArqC9ZD6mVaEVMfVZxjhTEDz5GQxjeYSuse5HDXYbUpUG2hNes59CSBDv4QaoaK3iuxt1uS",
+      "enforcement": "ledger-manual — disclosed, not a program"
+    }
+  ]
+}
