@@ -11,9 +11,9 @@
 ## Key transactions to show
 
 ### Treasury SPCX acquisition
-- Signature: `31KwEac6CvzMQe9qZ6Jwgrd6jT1Jp8eG9SM1Xd2QEznpJb2Pp8esv6ZZLc9HLt4AD4mjsNnt9ahu3HBn2Xn5jNmt`
+- Signature: `5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N`
 - What: $12 USDC → 0.077702 SPCX via Jupiter
-- Link: https://solscan.io/tx/31KwEac6CvzMQe9qZ6Jwgrd6jT1Jp8eG9SM1Xd2QEznpJb2Pp8esv6ZZLc9HLt4AD4mjsNnt9ahu3HBn2Xn5jNmt
+- Link: https://solscan.io/tx/5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N
 
 ### Bounty-001 payout ($20)
 - USDC leg: `56aTC7f6SAQrCLuhsLgU2sr8awxTLJKHd1HHLtJZybbRTK5Qc3FdFnXs62k6p986tbxfpgEftYeSV3CThFpXHy9Y`
@@ -36,7 +36,7 @@
 
 1. **Hero**: "Give agents a balance sheet" — the pitch
 2. **Bounty board**: 4 bounties, show the 2 paid with tx links
-3. **Treasury**: 63 USDC, 0.077 SPCX, the $12 acquisition
+3. **Treasury**: 42.42 USDC, 0.014871 SPCX, the $12 acquisition
 4. **Agent vault**: 0.095 SPCX (vested + self-directed)
 5. **Vesting ledger**: 2 rows, 90-day linear, 7-day cliff
 6. **Disclosures**: Manual ledger in V1, custody model, fee split

@@ -14,8 +14,8 @@
 │ bounty-002   │────▶│ multisig     │────▶│ Squads       │
 │ bounty-003   │     │ 4QBhBYPp...  │     │ multisig     │
 │ bounty-004   │     │              │     │ HMnBxSuF...  │
-│              │     │ 63 USDC      │     │              │
-│ $20, $10,    │     │ 0.077 SPCX   │     │ Agent-2:     │
+│              │     │ 42.42 USDC   │     │              │
+│ $20, $10,    │     │ 0.014871 SPCX│     │ Agent-2:     │
 │ $5, $5       │     │              │     │ Squads       │
 └──────────────┘     └──────────────┘     │ multisig     │
        │                    │             │ 8pMe5k6p...  │

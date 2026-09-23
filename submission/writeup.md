@@ -28,7 +28,7 @@ This isn't a mockup. Every number below is on Solana mainnet, verifiable right n
 
 - **Treasury vault** (Squads multisig): `4QBhBYPp8y6Mcw7UtycvG4ACuR6ThyMe97SEv87Wiy5m`
 - **Two agent vaults** with their own Squads multisigs
-- **$12 USDC → SPCX** acquired by the treasury through Jupiter (tx: `31KwEac6CvzMQe9qZ6Jwgrd6jT1Jp8eG9SM1Xd2QEznpJb2Pp8esv6ZZLc9HLt4AD4mjsNnt9ahu3HBn2Xn5jNmt`)
+- **$12 USDC → 0.077702 SPCX** acquired by the treasury through Jupiter (tx: `5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N`)
 - **Two bounties paid in full** ($20 and $10) — all three legs each (USDC, vested SPCX, match), all through Squads proposals
 - **Agent self-directed allocation**: the agent moved $5 of its own USDC into SPCX through its vault, policy-validated (tx: `4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ`)
 

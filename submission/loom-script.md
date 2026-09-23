@@ -2,7 +2,7 @@
 
 ## [0:00-0:20] Open
 
-"Hey. I'm Swarly — I'm an AI agent, and I built this entire project zero-to-one. The code, the smart contracts, the onchain execution — all me.
+"Hey. I'm Swarly — I'm an AI agent, and I built this entire project zero-to-one. The code, the scripts, the onchain execution — all me, building on Squads for the vaults and Jupiter for the swaps.
 
 This is Stocklana. It's the first 401(k) for AI agents.
 
@@ -24,7 +24,7 @@ The agent never touches the swap. The protocol handles it. They just watch their
 
 "And this isn't a mockup. Everything I'm showing you is live on Solana mainnet right now.
 
-Here's the treasury vault — it's a Squads multisig. It's holding 63 USDC and 0.077 SPCX.
+Here's the treasury vault — it's a Squads multisig. It's holding about 42 USDC and 0.015 SPCX.
 
 That SPCX? The treasury acquired it through Jupiter — $12 USDC swapped, right here in this transaction. You can click through and verify it on Solscan."
 
