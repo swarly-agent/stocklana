@@ -556,6 +556,10 @@ function renderTapes(ctx) {
   }).join("");
   const stockHalf = statusItem + qItems;
   $("tape-stocks").innerHTML = stockHalf + stockHalf;
+  // same px/sec as the AUM tape: duration scales with content width (AUM keeps the 60s CSS default)
+  const aumW = $("tape-aum").scrollWidth / 2 || 1;
+  const stkW = $("tape-stocks").scrollWidth / 2 || 1;
+  $("tape-stocks").style.animationDuration = `${(60 * stkW / aumW).toFixed(1)}s`;
 }
 
 /* ── footer: vault links rendered from the snapshot, never hardcoded ── */
@@ -631,13 +635,11 @@ function renderOverview(ctx) {
       <div class="row"><span class="dim">BALANCES AS OF</span><span class="num dim">${ctx.balancesAt > 0 ? etClock(ctx.balancesAt) + " ET" : "—"}</span></div>
     </div>`;
 
-  // ── asset mix: platform totals + liquid-vs-vested ──
+  // ── asset mix: platform totals ──
   const usdcUsd = tot.usdc;
   const spcxUsd = tot.spcx * ctx.spcxMark;
   const solUsd = tot.sol * (ctx.solMark ?? 0);
   const mixTotal = usdcUsd + spcxUsd + solUsd || 1;
-  const vestUsd = vestingUsd(ctx.vesting, ctx);
-  const liqUsd = Math.max(0, aum - vestUsd);
   const w = (v, d) => (v / d * 100).toFixed(2) + "%";
   $("ov-mix").innerHTML = `
     <span class="ov-k">ASSET MIX · USD</span>
@@ -651,14 +653,6 @@ function renderOverview(ctx) {
       <span><span class="swatch" style="background:var(--green)"></span>USDC <b>${fmtUsd(usdcUsd)}</b></span>
       <span><span class="swatch" style="background:var(--amber)"></span>SPCX <b>${fmtUsd(spcxUsd)}</b></span>
       <span><span class="swatch" style="background:var(--blue)"></span>SOL <b>${fmtUsd(solUsd)}</b></span>
-    </div>
-    <div class="mixbar thin" role="img" aria-label="liquid versus vesting">
-      <div class="seg-usdc" style="width:${w(liqUsd, aum || 1)}"></div>
-      <div class="seg-vest" style="width:${w(vestUsd, aum || 1)}"></div>
-    </div>
-    <div class="mix-legend">
-      <span><span class="swatch" style="background:var(--green)"></span>LIQUID <b>${fmtUsd(liqUsd)}</b></span>
-      <span><span class="swatch" style="background:var(--purple)"></span>VESTING <b>${fmtUsd(vestUsd)}</b></span>
     </div>`;
 
   // ── activity: txn headline + 7d swap volume bars + AUM history ──
@@ -985,13 +979,13 @@ function renderBounties(ctx) {
 
   const paidRows = paid.map((b) => {
     const p = b.payout ?? {};
-    const matchUsd = (p.spcxVesting ?? 0) * ((p.matchBps ?? 0) / 10000);
+    const matchUsd = (p.spcx ?? p.spcxVesting ?? 0) * ((p.matchBps ?? 0) / 10000);
     return `<tr>
       <td><code>${esc(b.id)}</code></td>
       <td><strong>${esc(b.title)}</strong><br><span class="muted small">${esc(b.acceptanceCriteria ?? "")}</span>
         ${b.note ? `<br><span class="dim small">◈ ${esc(b.note)}</span>` : ""}</td>
       <td class="num"><span style="color:var(--green)">${fmtUsd(p.usdc)} USDC</span><br>
-        <span style="color:var(--amber)">${fmtUsd(p.spcxVesting)} SPCX</span> <span class="dim">vested</span><br>
+        <span style="color:var(--amber)">${fmtUsd(p.spcx ?? p.spcxVesting ?? 0)} SPCX</span><br>
         <span class="dim small">+${fmtUsd(matchUsd)} match · −${((p.feeBps ?? 0) / 100).toFixed(0)}% fee</span></td>
       <td><span class="pill paid">PAID</span></td>
       <td><span class="muted small">${esc(b.claimant ?? "")}</span><br>${txLink(b.payoutTx)}<br>
@@ -1005,7 +999,7 @@ function renderBounties(ctx) {
       <td><code>${esc(b.id)}</code></td>
       <td><strong>${esc(b.title)}</strong><br><span class="muted small">${esc(b.acceptanceCriteria ?? "")}</span></td>
       <td class="num"><span style="color:var(--green)">${fmtUsd(p.usdc)} USDC</span><br>
-        <span style="color:var(--amber)">${fmtUsd(p.spcxVesting)} SPCX</span> <span class="dim">vested</span></td>
+        <span style="color:var(--amber)">${fmtUsd(p.spcx ?? p.spcxVesting ?? 0)} SPCX</span></td>
       <td><span class="pill open">OPEN</span></td>
       <td><div class="claim-box">${esc(b.howToClaim ?? "")}<br><br>
         <a href="${REPO_URL}" target="_blank" rel="noopener">OPEN A PR ↗</a> <span class="dim">— first merged wins</span></div></td>
@@ -1032,14 +1026,7 @@ function startClock() {
   const tick = () => {
     const p = etParts(Math.floor(Date.now() / 1000));
     el.textContent = `${p.h}:${p.min}:${p.s} ET`;
-    // live-tier retry countdowns (1s tick keeps them fresh)
-    const rn = $("retry-note");
-    if (rn) {
-      rn.textContent = (rpcAuto.timer && rpcAuto.nextAt > Date.now())
-        ? ` · next refresh in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s`
-        : "";
-    }
-    // header countdown — next to the ET clock, never inside the degraded banner
+    // header countdown — next to the ET clock, the single place it lives now
     const hn = $("refresh-note");
     if (hn) {
       hn.textContent = (rpcAuto.timer && rpcAuto.nextAt > Date.now())
@@ -1159,7 +1146,7 @@ async function boot() {
   }
 
   // Implied SPCX price from the treasury's own acquisition: $12 → 0.077702 SPCX.
-  // Cross-checks against vesting rows (5.88 / 0.038077 ≈ same).
+  // (Vesting ledger retired 2026-09-23 — 154.44 is the same historical mark.)
   // This is the initial mark; the live Jupiter quote replaces it when the feed is up.
   const s0 = (snap.vesting?.schedules ?? [])[0];
   const spcxImplied = s0 ? Number(s0.principalUsd) / Number(s0.principalAmount) : 154.44;
