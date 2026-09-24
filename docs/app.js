@@ -540,18 +540,6 @@ function renderTapes(ctx) {
   $("tape-stocks").style.animationDuration = `${(60 * stkW / aumW).toFixed(1)}s`;
 }
 
-/* ── footer: vault links rendered from the snapshot, never hardcoded ── */
-
-function renderFooterVaults(ctx) {
-  const el = $("foot-vaults");
-  if (!el) return;
-  el.innerHTML = (ctx.agents ?? []).map((a) => {
-    const label = String(a.id ?? a.key).toUpperCase();
-    const addr = a.vaultPda ?? a.key;
-    return `<a href="https://solscan.io/account/${esc(addr)}" target="_blank" rel="noopener">${esc(label)} VAULT</a>`;
-  }).join("");
-}
-
 /* ── F1 · exchange overview ── */
 
 /** Short uppercase label for an agent vault key, from the snapshot agent list. */
@@ -1121,7 +1109,6 @@ async function boot() {
   renderAgents(ctx);
   renderFeed(ctx);
   renderBounties(ctx);
-  renderFooterVaults(ctx);
 
   // Live quote feed (independent of RPC tier): immediate fetch, then
   // self-scheduling with backoff — upgrades the SPCX mark + stocks tape.

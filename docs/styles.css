@@ -675,6 +675,3 @@ footer {
 .powered-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
 .powered-logo { border: 1px solid var(--border-hi); padding: 7px 12px; font-size: 10px; letter-spacing: 0.14em; color: var(--text); text-decoration: none; }
 .powered-logo:hover { border-color: var(--amber); color: var(--amber); }
-
-/* ══════════ FOOTER: snapshot-rendered vault links ══════════ */
-.foot-vaults { display: inline-flex; gap: 18px; flex-wrap: wrap; }
