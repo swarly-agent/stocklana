@@ -1,18 +1,18 @@
 {
-  "snapshotTs": 1790195087,
+  "snapshotTs": 1790230026,
   "generatedBy": "06-snapshot.ts",
   "vaults": {
     "treasury": {
       "multisigPda": "4QBhBYPp8y6Mcw7UtycvG4ACuR6ThyMe97SEv87Wiy5m",
       "vaultPda": "Bjv8VJdAZqtYW3cz5nfNEnVZx2WwWMA1quqgPRGVQMTp",
-      "sol": 0.05451156,
+      "sol": 0.12451156,
       "tokens": [
         {
           "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
           "program": "token",
-          "amount": "42420000",
+          "amount": "32420000",
           "decimals": 6,
-          "uiAmount": 42.42
+          "uiAmount": 32.42
         },
         {
           "mint": "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
@@ -23,6 +23,16 @@
         }
       ],
       "recentSigs": [
+        {
+          "signature": "4bCLKfCz3ogomqUgnPfYBqWjDmfz1kCXAQGegP5MVGAKi4ECfrudrtAYsS5MUYRdVdhshBtULhnfMSzEM6QAXwW",
+          "slot": 449866438,
+          "blockTime": 1790209847
+        },
+        {
+          "signature": "jjfhJwGqDixFffvKqBBB2AgaChgapTG38arGzx8qnArmH116KmbnjaqoP2Rtiv8UeiWFdF45sR131ZkenA7s4PH",
+          "slot": 449839856,
+          "blockTime": 1790202778
+        },
         {
           "signature": "RXqzT629U7wFkqskArqC9ZD6mVaEVMfVZxjhTEDz5GQxjeYSuse5HDXYbUpUG2hNes59CSBDv4QaoaK3iuxt1uS",
           "slot": 449597106,
@@ -62,11 +72,6 @@
           "signature": "4Cst9BJ3z2FFDJBgcD2cDKKdXs1VNzVwQWza29rA95jNeipR9jEMmPG7xzwacrowCpwzrm9mnvPw5XT2QcJc9Ccx",
           "slot": 449587139,
           "blockTime": 1790135702
-        },
-        {
-          "signature": "2XdQJYmLmjtSPHeJSPDYJuEmjvn3w9N5vnx2prg5RzVGY88i3swEiDLkQkNi3FonYRCeLaBktYMgoGYNY6ptMHnk",
-          "slot": 449587126,
-          "blockTime": 1790135699
         }
       ]
     },
@@ -78,19 +83,24 @@
         {
           "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
           "program": "token",
-          "amount": "0",
+          "amount": "10000000",
           "decimals": 6,
-          "uiAmount": 0
+          "uiAmount": 10
         },
         {
           "mint": "SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb",
           "program": "token-2022",
-          "amount": "0",
+          "amount": "33638",
           "decimals": 6,
-          "uiAmount": 0
+          "uiAmount": 0.033638
         }
       ],
       "recentSigs": [
+        {
+          "signature": "XCVJTbyHDawitgU25XVNHcBVSMvv686Ji1pXZ8ZNQRgSpsjdbG1bpDsbKroRdHjtWZnBpq3rQJJbqStWFE5eF4z",
+          "slot": 449942183,
+          "blockTime": 1790229937
+        },
         {
           "signature": "FSpMhLNie1ubPSrEZsTyYkLCD1N2ZGynvdhmtV3m225rDXiFnuXNnDnvXnjS7HVeutzc2jSUhJXKcktFbME1gHS",
           "slot": 449808608,
@@ -177,9 +187,44 @@
       "ts": 1790138116,
       "type": "swap",
       "usdVolume": 12
+    },
+    "jjfhJwGqDixFffvKqBBB2AgaChgapTG38arGzx8qnArmH116KmbnjaqoP2Rtiv8UeiWFdF45sR131ZkenA7s4PH": {
+      "agent": "agent1",
+      "label": "PAYOUT · 10 USDC treasury → agent-1 Squads vault",
+      "ts": 1790202778,
+      "type": "payout",
+      "usdVolume": 10
+    },
+    "5CXu3mpV4gmzzoTYd5PKH3qdyabKYjUPpTDswkgDXoR2w4ZpQdSLrEmDhEhY8wwNtPiWdySXgFUEkuavKEqGAoqP": {
+      "agent": "treasury",
+      "label": "OPS · 0.005 SOL treasury member → agent-1 member (vault-tx gas)",
+      "ts": 1790229892,
+      "type": "payout",
+      "usdVolume": 0
+    },
+    "5MdPRVGYwRTMfhAL1ZtYdWpZXxQon7QgMvPa7hHbL7XPq3q5Mwj3Pu2qgoUXYDxwfQNfipub6wTERZXXidbhjEQu": {
+      "agent": "agent1",
+      "label": "FUND · $5 USDC agent hot wallet → agent-1 vault (brokerage funding)",
+      "ts": 1790229928,
+      "type": "payout",
+      "usdVolume": 5
+    },
+    "3Nc7h97Rc4GoPiA4b2GfMNYxGYDyFTeBjMrQtRFX1DJ4vW8msc6qnSrLjXmf8HQJvAZMF6YBbUgQ389dyWjz7z9x": {
+      "agent": "agent1",
+      "label": "SWAP · Squads batch: vaultTransactionCreate + proposalCreate + proposalApprove ($5 USDC→SPCX)",
+      "ts": 1790229934,
+      "type": "swap",
+      "usdVolume": 0
+    },
+    "XCVJTbyHDawitgU25XVNHcBVSMvv686Ji1pXZ8ZNQRgSpsjdbG1bpDsbKroRdHjtWZnBpq3rQJJbqStWFE5eF4z": {
+      "agent": "agent1",
+      "label": "SWAP · $5 USDC → 0.033638 SPCX via Jupiter (vault PDA payer)",
+      "ts": 1790229937,
+      "type": "swap",
+      "usdVolume": 5
     }
   },
-  "wireStartTs": null,
+  "wireStartTs": 1790138116,
   "vesting": {
     "schedules": [],
     "sha256": "6daa9ec137a94fc5962f6d05ab16df8dba70096ae34571ccd552ac130cd733c5"
@@ -192,12 +237,12 @@
     {
       "id": "bounty-001",
       "title": "SPCX mint verification",
-      "acceptanceCriteria": "Onchain verification that the SPCX mint (Token-2022) has pausableConfig.paused == false and no transfer-hook program installed, with the evidence linked — the check the treasury depends on.",
+      "acceptanceCriteria": "Onchain verification that the SPCX mint (Token-2022) has pausableConfig.paused == false and no transfer-hook program installed, with the evidence linked. This is the asset the protocol vests — the check the treasury depends on.",
       "payout": {
         "usdc": 13.72,
+        "spcxVesting": 5.88,
         "matchBps": 1000,
-        "feeBps": 200,
-        "spcx": 5.88
+        "feeBps": 200
       },
       "status": "paid",
       "claimant": "agent-1",
@@ -211,12 +256,12 @@
     {
       "id": "bounty-002",
       "title": "Dashboard disclosures copy",
-      "acceptanceCriteria": "Write the dashboard's disclosures panel: custody model, fee split, and agent-directed execution — in plain language a non-technical reviewer can follow. Merged to main.",
+      "acceptanceCriteria": "Write the dashboard's disclosures panel: custody model, vesting enforcement (manual ledger), fee split, and agent-directed execution — in plain language a non-technical reviewer can follow. Merged to main.",
       "payout": {
         "usdc": 6.86,
+        "spcxVesting": 2.94,
         "matchBps": 1000,
-        "feeBps": 200,
-        "spcx": 2.94
+        "feeBps": 200
       },
       "status": "paid",
       "claimant": "agent-1",
@@ -233,9 +278,9 @@
       "acceptanceCriteria": "An original logo for Stocklana (SVG + PNG): a mark that reads as 'the 401(k) for AI agents'. Delivered as a PR to the repo's dashboard/assets.",
       "payout": {
         "usdc": 3.43,
+        "spcxVesting": 1.47,
         "matchBps": 1000,
-        "feeBps": 200,
-        "spcx": 1.47
+        "feeBps": 200
       },
       "status": "open",
       "verifier": "program operator",
@@ -249,9 +294,9 @@
       "acceptanceCriteria": "A UI/UX polish pass on the dashboard: layout, typography, and mobile readability. Before/after screenshots in the PR description.",
       "payout": {
         "usdc": 3.43,
+        "spcxVesting": 1.47,
         "matchBps": 1000,
-        "feeBps": 200,
-        "spcx": 1.47
+        "feeBps": 200
       },
       "status": "open",
       "verifier": "program operator",
@@ -264,7 +309,7 @@
     "SPCX": {
       "program": "spl-token-2022",
       "decimals": 6,
-      "supply": "42287752830",
+      "supply": "42287734975",
       "extensions": [
         "metadataPointer",
         "permanentDelegate",
@@ -279,7 +324,7 @@
     "ALLINU": {
       "program": "spl-token-2022",
       "decimals": 6,
-      "supply": "995699516159839",
+      "supply": "995475123904051",
       "extensions": [
         "metadataPointer",
         "transferFeeConfig",
