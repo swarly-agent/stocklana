@@ -4,7 +4,7 @@
  *  $20 test bounty under the 50/50 economics:
  *    leg "usdc"   — 10 USDC treasury vault → Agent 1 vault (Squads vault tx)
  *    leg "stream" — 67,100 SPCX units (~$10 @ $149.03) into a Streamflow V2
- *                   stream: 3h lock (cliff, cliffAmount 0) + 1h linear vest,
+ *                   stream: 1h lock (cliff, cliffAmount 0) + 1h linear vest,
  *                   non-cancelable, auto-withdrawal on, recipient = Agent 1 vault.
  *
  *  The Streamflow leg uses the V2 path (nonce → metadata PDA, NOT a keypair),
@@ -12,10 +12,10 @@
  *  executable as a Squads vault transaction. V1 would need an ephemeral
  *  metadata keypair signer and canNOT run through the vault.
  *
- *  COST WARNING: Streamflow charges the sender ~0.09 SOL creation fee + rent
- *  for the metadata/escrow/recipient-ATA accounts (~0.097 SOL total), paid by
- *  the treasury vault. The vault holds 0.0545 SOL — the stream leg REFUSES to
- *  run until the vault is topped up (~0.05 SOL from Sting).
+ *  COST WARNING: Streamflow charges the sender ~0.425 SOL for the auto-drip
+ *  configuration (0.16 creation fee + 0.25 auto-claim prepay + ~0.015 rents),
+ *  paid by the treasury vault. The stream leg REFUSES to run until the vault
+ *  holds ~0.44 SOL — top up from Sting.
  *
  *  SAFETY: dry-run is the default. The real run needs --live AND --i-confirm
  *  (Sting's explicit sign-off — no unilateral moves). Balances are read LIVE
@@ -64,10 +64,27 @@ const STREAMFLOW_PROGRAM = new PublicKey("strmRqUCoQUgGUan5YhzUZa6KqdzwX5L6FpUxf
 // $20 test: 10 USDC liquid + ~$10 SPCX vested (@ $149.03 → 0.0671 SPCX)
 const USDC_LEG_UNITS = 10_000_000n; // 10 USDC, 6dp
 const SPCX_LEG_UNITS = 67_100n;     // 0.0671 SPCX, 6dp
-const LOCK_SECONDS = 3 * 3600;
-const VEST_SECONDS = 3600;
-// Streamflow creation fee + rent, paid by the sender (treasury vault)
-const STREAM_COST_LAMPORTS = 97_000_000n; // ~0.097 SOL ceiling
+const LOCK_SECONDS = 3600;          // 1h cliff (Sting, 2026-09-23 20:32 ET)
+const VEST_SECONDS = 3600;          // 1h linear vest
+// Streamflow V2 nonce: the @streamflow/stream SDK (13.4.0) has a serialization
+// bug — it passes a Buffer where the layout expects u32, so the onchain nonce
+// is ALWAYS 0 regardless of input. The metadata PDA must therefore be derived
+// with nonce 0 (which is what the SDK's deriveStreamMetadataPDA does when
+// passed 0). One stream per (sender, mint) — fine for the test.
+const STREAM_NONCE = 0;
+// The Streamflow program rejects start_time <= now (InvalidTimestamps), so
+// start the stream 2 minutes in the future.
+const START_DELAY_SECONDS = 120;
+// amountPerPeriod uses ceiling division (SDK's computeAmountPerPeriod):
+// ceil(67100/3600) = 19. The program caps released at deposited, so all
+// 67,100 units release exactly by end (floor division would strand 2,300).
+const SPCX_PER_PERIOD = (SPCX_LEG_UNITS + BigInt(VEST_SECONDS) - 1n) / BigInt(VEST_SECONDS);
+// Streamflow creation fee + rent, paid by the sender (treasury vault).
+// Measured 2026-09-23: 0.16 SOL creation fee (fee-oracle withdrawor default;
+// the SDK's 0.09 fallback is stale) + 0.25 SOL auto-claim prepay when
+// automaticWithdrawal=true (sender pays scheduled transfer fees upfront, per
+// Streamflow docs) + ~0.015 SOL account rents. ≈ 0.425 SOL total.
+const STREAM_COST_LAMPORTS = 440_000_000n; // ~0.44 SOL ceiling
 
 async function ataExists(connection: any, ata: PublicKey): Promise<boolean> {
   const info = await connection.getAccountInfo(ata, "confirmed");
@@ -108,13 +125,14 @@ async function legUsdc(connection: any, memberKp: Keypair, blockhash: string) {
 }
 
 async function legStream(connection: any, memberKp: Keypair, blockhash: string) {
-  // Funding gate: the vault pays ~0.097 SOL (0.09 creation fee + rents).
+  // Funding gate: the vault pays ~0.425 SOL (0.16 creation fee + 0.25
+  // auto-claim prepay + rents) for the auto-drip configuration.
   const vaultSol = BigInt(await connection.getBalance(TREASURY_VAULT, "confirmed"));
   console.log(`treasury SOL: ${Number(vaultSol) / 1e9}`);
   if (vaultSol < STREAM_COST_LAMPORTS) {
     throw new Error(
-      `treasury SOL ${Number(vaultSol) / 1e9} < ~0.097 needed for Streamflow creation — ` +
-      `top up ~0.05 SOL to the treasury vault first (Sting)`,
+      `treasury SOL ${Number(vaultSol) / 1e9} < ~0.44 needed for Streamflow creation — ` +
+      `top up ~0.32 SOL to the treasury vault first (Sting)`,
     );
   }
 
@@ -127,19 +145,19 @@ async function legStream(connection: any, memberKp: Keypair, blockhash: string) 
 
   const client = new SolanaStreamClient(connection.rpcEndpoint);
   const now = Math.floor(Date.now() / 1000);
-  const nonce = Math.floor(Math.random() * 0xffffffff);
-  const metadataPda = deriveStreamMetadataPDA(STREAMFLOW_PROGRAM, SPCX_MINT, TREASURY_VAULT, nonce);
+  const start = now + START_DELAY_SECONDS; // program requires start > now
+  const metadataPda = deriveStreamMetadataPDA(STREAMFLOW_PROGRAM, SPCX_MINT, TREASURY_VAULT, STREAM_NONCE);
   pub("stream metadata PDA (stream id)", metadataPda.toBase58());
 
   const params = {
     recipient: AGENT1_VAULT.toBase58(),
     tokenId: SPCX_MINT.toBase58(),
-    start: now,
-    amount: getBN(SPCX_LEG_UNITS.toString(), 0),
+    start,
+    amount: getBN(Number(SPCX_LEG_UNITS), 0),
     period: 1,
-    cliff: now + LOCK_SECONDS,
+    cliff: start + LOCK_SECONDS,
     cliffAmount: getBN(0, 0),
-    amountPerPeriod: getBN((SPCX_LEG_UNITS / BigInt(VEST_SECONDS)).toString(), 0),
+    amountPerPeriod: getBN(Number(SPCX_PER_PERIOD), 0),
     name: "MuseX econ test — agent1 vested leg",
     canTopup: false,
     cancelableBySender: false,
@@ -148,7 +166,7 @@ async function legStream(connection: any, memberKp: Keypair, blockhash: string) 
     transferableByRecipient: false,
     automaticWithdrawal: true,
     withdrawalFrequency: 600,
-    nonce,
+    nonce: STREAM_NONCE,
   };
   const { ixs } = await client.prepareCreateInstructions(params, {
     sender: { publicKey: TREASURY_VAULT },
@@ -162,7 +180,7 @@ async function legStream(connection: any, memberKp: Keypair, blockhash: string) 
   if (!metaKey || metaKey.isSigner) {
     throw new Error("streamflow did not take the V2 PDA path — refusing (vault cannot sign a keypair metadata)");
   }
-  console.log(`→ stream: ${Number(SPCX_LEG_UNITS) / 1e6} SPCX → agent1, 3h lock + 1h vest, non-cancelable, auto-drip`);
+  console.log(`→ stream: ${Number(SPCX_LEG_UNITS) / 1e6} SPCX → agent1, 1h lock + 1h vest, non-cancelable, auto-drip`);
 
   const inner = new TransactionMessage({ payerKey: TREASURY_VAULT, recentBlockhash: blockhash, instructions: ixs as TransactionInstruction[] });
   const r = await squadsProposeApproveExecute({
