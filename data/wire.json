@@ -1,1 +1,4 @@
-{"_note":"Activity Wire (F3) gate. The wire shows only transactions with blockTime >= startTs. The full-economics test script sets startTs to the test's first transaction time; until then it stays null and the wire shows an honest empty state. Sweep transactions are never registered and never shown.","startTs":null}
+{
+ "_note": "Activity Wire (F3) gate. The wire shows only transactions with blockTime >= startTs. The full-economics test script sets startTs to the test's first transaction time; until then it stays null and the wire shows an honest empty state. Sweep transactions are never registered and never shown.",
+ "startTs": 1790138116
+}

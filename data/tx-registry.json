@@ -1,1 +1,52 @@
-{"4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ":{"agent":"agent1","label":"AGENT-1 SWAP · $5 USDC → 0.032377 SPCX VIA JUPITER","ts":1790138586,"type":"swap","usdVolume":5},"5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N":{"agent":"treasury","label":"TREASURY SWAP · $12 USDC → 0.077702 SPCX VIA JUPITER","ts":1790138116,"type":"swap","usdVolume":12},"_note":"Snapshot transaction registry. Maps signature -> {label, type, usdVolume, agent, ts}. Only labeled signatures appear on the Activity Wire (F3). Types: swap | payout | vesting. The full-economics test script appends new entries here; 06-snapshot.ts copies this map into data.snapshot.json as txRegistry."}
+{
+ "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ": {
+  "agent": "agent1",
+  "label": "AGENT-1 SWAP \u00b7 $5 USDC \u2192 0.032377 SPCX VIA JUPITER",
+  "ts": 1790138586,
+  "type": "swap",
+  "usdVolume": 5
+ },
+ "5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N": {
+  "agent": "treasury",
+  "label": "TREASURY SWAP \u00b7 $12 USDC \u2192 0.077702 SPCX VIA JUPITER",
+  "ts": 1790138116,
+  "type": "swap",
+  "usdVolume": 12
+ },
+ "_note": "Snapshot transaction registry. Maps signature -> {label, type, usdVolume, agent, ts}. Only labeled signatures appear on the Activity Wire (F3). Types: swap | payout | vesting. The full-economics test script appends new entries here; 06-snapshot.ts copies this map into data.snapshot.json as txRegistry.",
+ "jjfhJwGqDixFffvKqBBB2AgaChgapTG38arGzx8qnArmH116KmbnjaqoP2Rtiv8UeiWFdF45sR131ZkenA7s4PH": {
+  "agent": "agent1",
+  "label": "PAYOUT \u00b7 10 USDC treasury \u2192 agent-1 Squads vault",
+  "ts": 1790202778,
+  "type": "payout",
+  "usdVolume": 10
+ },
+ "5CXu3mpV4gmzzoTYd5PKH3qdyabKYjUPpTDswkgDXoR2w4ZpQdSLrEmDhEhY8wwNtPiWdySXgFUEkuavKEqGAoqP": {
+  "agent": "treasury",
+  "label": "OPS \u00b7 0.005 SOL treasury member \u2192 agent-1 member (vault-tx gas)",
+  "ts": 1790229892,
+  "type": "payout",
+  "usdVolume": 0
+ },
+ "5MdPRVGYwRTMfhAL1ZtYdWpZXxQon7QgMvPa7hHbL7XPq3q5Mwj3Pu2qgoUXYDxwfQNfipub6wTERZXXidbhjEQu": {
+  "agent": "agent1",
+  "label": "FUND \u00b7 $5 USDC agent hot wallet \u2192 agent-1 vault (brokerage funding)",
+  "ts": 1790229928,
+  "type": "payout",
+  "usdVolume": 5
+ },
+ "3Nc7h97Rc4GoPiA4b2GfMNYxGYDyFTeBjMrQtRFX1DJ4vW8msc6qnSrLjXmf8HQJvAZMF6YBbUgQ389dyWjz7z9x": {
+  "agent": "agent1",
+  "label": "SWAP \u00b7 Squads batch: vaultTransactionCreate + proposalCreate + proposalApprove ($5 USDC\u2192SPCX)",
+  "ts": 1790229934,
+  "type": "swap",
+  "usdVolume": 0
+ },
+ "XCVJTbyHDawitgU25XVNHcBVSMvv686Ji1pXZ8ZNQRgSpsjdbG1bpDsbKroRdHjtWZnBpq3rQJJbqStWFE5eF4z": {
+  "agent": "agent1",
+  "label": "SWAP \u00b7 $5 USDC \u2192 0.033638 SPCX via Jupiter (vault PDA payer)",
+  "ts": 1790229937,
+  "type": "swap",
+  "usdVolume": 5
+ }
+}

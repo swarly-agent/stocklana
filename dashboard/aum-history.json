@@ -7,5 +7,14 @@
     "spcxMark": 148.29234543610707,
     "solMark": 114.1331261030325,
     "markSource": "jupiter-live"
+  },
+  {
+    "ts": 1790230026,
+    "usdc": 42.42,
+    "spcx": 0.14371699999999998,
+    "sol": 0.13451156,
+    "spcxMark": 147.09770462096287,
+    "solMark": 114.9655118334689,
+    "markSource": "jupiter-live"
   }
 ]
