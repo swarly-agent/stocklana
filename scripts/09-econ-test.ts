@@ -1,11 +1,21 @@
 /**
- * 09-econ-test.ts — the fresh full-economics test (2026-09-23 walkthrough, F3 decision).
+ *  09 — economics test: the full MuseX compensation loop on mainnet.
+ *
+ *  DEFERRED (Sting, 2026-09-23): the Streamflow leg is CUT from v1 — per-stream
+ *  fees (~0.425 SOL: 0.16 creation + 0.25 auto-claim prepay + rents) make it
+ *  uneconomic for micropayments. Vesting returns in V2 only where economically
+ *  viable (grant-sized awards / batched streams). This script is retained as the
+ *  V2 reference implementation (params verified against mainnet 2026-09-23).
+ *
+ *  V1 economics: micropayments settle as instant USDC to the agent's vault;
+ *  the invest leg is agent-executed Jupiter swaps (auto-invest policy).
  *
  *  $20 test bounty under the 50/50 economics:
  *    leg "usdc"   — 10 USDC treasury vault → Agent 1 vault (Squads vault tx)
- *    leg "stream" — 67,100 SPCX units (~$10 @ $149.03) into a Streamflow V2
- *                   stream: 1h lock (cliff, cliffAmount 0) + 1h linear vest,
- *                   non-cancelable, auto-withdrawal on, recipient = Agent 1 vault.
+ *    leg "stream" — (DEFERRED TO V2) 67,100 SPCX units (~$10 @ $149.03) into
+ *                   a Streamflow V2 stream: 1h lock (cliff, cliffAmount 0) +
+ *                   1h linear vest, non-cancelable, auto-withdrawal on,
+ *                   recipient = Agent 1 vault.
  *
  *  The Streamflow leg uses the V2 path (nonce → metadata PDA, NOT a keypair),
  *  so the only signer on the create instruction is the treasury vault PDA —
