@@ -300,16 +300,6 @@ function tokenBalance(vault, mint) {
   return t ? t.uiAmount ?? Number(t.amount) / Math.pow(10, t.decimals || 6) : 0;
 }
 
-/** Vested fraction of a schedule at unix time `now` (0 before cliff, linear to 1). */
-function vestedFraction(sched, now) {
-  const start = Number(sched.startTs);
-  const cliff = start + Number(sched.cliffDays) * 86400;
-  const end = start + Number(sched.durationDays) * 86400;
-  if (now < cliff) return 0;
-  if (now >= end) return 1;
-  return (now - start) / (end - start);
-}
-
 /** USD value of a vault: USDC + SPCX×mark + SOL×mark. SOL counts toward AUM. */
 function vaultUsd(vault, ctx) {
   return tokenBalance(vault, USDC_MINT)
@@ -318,7 +308,7 @@ function vaultUsd(vault, ctx) {
 }
 function bountyUsd(b) {
   const p = b.payout ?? {};
-  return (p.usdc ?? 0) + (p.spcxVesting ?? 0);
+  return (p.usdc ?? 0) + (p.spcx ?? p.spcxVesting ?? 0);
 }
 
 /* ───────────────────────── data boot ───────────────────────── */
@@ -388,18 +378,6 @@ function txLabelFor(sig, ctx) {
   const e = (ctx.txRegistry ?? {})[sig];
   if (e) return { label: e.label ?? "ONCHAIN TRANSACTION", type: e.type ?? "" };
   return { label: "ONCHAIN TRANSACTION", type: "" };
-}
-
-/** Unvested SPCX across the given active schedules, in USD at the SPCX mark. */
-function vestingUsd(schedules, ctx) {
-  const now = ctx.ts;
-  let spcx = 0;
-  for (const s of schedules ?? []) {
-    if (String(s.status).toLowerCase() !== "active") continue;
-    const total = Number(s.principalAmount) + Number(s.matchAmount);
-    spcx += total * (1 - vestedFraction(s, now));
-  }
-  return spcx * ctx.spcxMark;
 }
 
 /** Swap volume per ET day over the trailing 7 days, from the tx registry. */
@@ -707,49 +685,6 @@ function renderOverview(ctx) {
 
 /* ── F2 · agent accounts: data-driven, top 100, paginated, searchable ── */
 
-function schedStatus(s, now) {
-  const start = Number(s.startTs);
-  const cliffTs = start + Number(s.cliffDays) * 86400;
-  if (now < cliffTs) return { txt: "IN CLIFF", color: "var(--red)", sub: `first release in ${((cliffTs - now) / 86400).toFixed(1)}d` };
-  const frac = vestedFraction(s, now);
-  if (frac >= 1) return { txt: "FULLY VESTED", color: "var(--green)", sub: "complete" };
-  const day = Math.floor((now - start) / 86400);
-  return { txt: `VESTING · DAY ${day}/${s.durationDays}`, color: "var(--blue)", sub: `${fmtPct(frac)} vested` };
-}
-
-function schedHtml(s, ctx) {
-  const now = ctx.ts;
-  const start = Number(s.startTs);
-  const end = start + Number(s.durationDays) * 86400;
-  const frac = vestedFraction(s, now);
-  const total = Number(s.principalAmount) + Number(s.matchAmount);
-  const vested = total * frac;
-  const elapsedPct = Math.min(100, Math.max(0, (now - start) / (end - start) * 100));
-  const cliffPct = (Number(s.cliffDays) / Number(s.durationDays) * 100).toFixed(2);
-  const st = schedStatus(s, now);
-  return `<div class="vest-sched">
-    <div class="vest-top">
-      <span class="vest-id">${esc(s.id)}</span>
-      <span class="muted">${s.durationDays}d linear · ${s.cliffDays}d cliff</span>
-    </div>
-    <div class="timeline">
-      <div class="elapsed" style="width:${elapsedPct.toFixed(2)}%"></div>
-      <div class="vested" style="width:${(frac * 100).toFixed(2)}%"></div>
-      <div class="cliff" style="left:${cliffPct}%"></div>
-      <div class="now" style="left:${elapsedPct.toFixed(2)}%"></div>
-      <div class="end-cap"></div>
-    </div>
-    <div class="ticks"><span>DAY 0 · ${et(start)}</span><span>CLIFF · DAY ${s.cliffDays}</span><span>DAY ${s.durationDays} · ${et(end)}</span></div>
-    <div class="vest-meta">
-      <strong style="color:${st.color}">${st.txt}</strong> · ${esc(st.sub)}<br>
-      vested <strong style="color:var(--text)">${fmtTok(vested)} / ${fmtTok(total)} SPCX</strong><br>
-      vesting total ${fmtTok(total)} SPCX · ${fmtUsd(total * ctx.spcxMark)} at mark<br>
-      fund ${txLink(s.fundingTx)}<br>
-      <span class="dim">enforcement: ${esc(s.enforcement ?? "ledger-manual — disclosed, not a program")}</span>
-    </div>
-  </div>`;
-}
-
 const AGENTS_PAGE_SIZE = 10;
 let agentsPage = 0;
 let agentsQuery = "";
@@ -762,8 +697,7 @@ function renderAgents(ctx) {
     const meta = agentByKey(ctx, key);
     const v = ctx.vaults[key] ?? {};
     const acctUsd = vaultUsd(v, ctx);
-    const vestUsd = vestingUsd((ctx.vesting ?? []).filter((s) => s.agent === meta.id), ctx);
-    return { key, meta, v, acctUsd, vestUsd, liqUsd: Math.max(0, acctUsd - vestUsd) };
+    return { key, meta, v, acctUsd };
   });
   list.sort((a, b) => b.acctUsd - a.acctUsd);
   list = list.slice(0, 100); // top 100
@@ -790,11 +724,7 @@ function renderAgents(ctx) {
   const cards = page.map((a) => {
     const { key, meta, v } = a;
     const usdc = tokenBalance(v, USDC_MINT);
-    const scheds = (ctx.vesting ?? []).filter((s) => s.agent === meta.id);
     const isOpen = openCards.has(key);
-    const vestHtml = scheds.length
-      ? scheds.map((s) => schedHtml(s, ctx)).join("")
-      : `<p class="empty-note">no vesting schedules.</p>`;
     const swapHtml = (v.recentSigs ?? []).length
       ? (v.recentSigs ?? []).slice(0, 8).map((s) => {
           const info = txLabelFor(s.signature, ctx);
@@ -816,7 +746,6 @@ function renderAgents(ctx) {
       <div class="agent-summary">
         <div class="sum-cell"><span class="k">ACCOUNT VALUE</span><span class="v">${fmtUsd(a.acctUsd)}</span></div>
         <div class="sum-cell"><span class="k">USDC</span><span class="v" style="color:var(--green)">${fmtTok(usdc, 2)}</span></div>
-        <div class="sum-cell"><span class="k">LIQUID</span><span class="v">${fmtUsd(a.liqUsd)}</span></div>
       </div>
       <div class="agent-detail">
         <div class="agent-sec">
@@ -825,10 +754,6 @@ function renderAgents(ctx) {
             <tr><td class="lbl">VAULT PDA</td><td>${addrCell(meta.vaultPda)}</td></tr>
             <tr><td class="lbl">MULTISIG</td><td>${addrCell(meta.multisigPda)}</td></tr>
           </tbody></table>
-        </div>
-        <div class="agent-sec">
-          <h4>VESTING SCHEDULES · ${scheds.length}</h4>
-          ${vestHtml}
         </div>
         <div class="agent-sec">
           <h4>ONCHAIN HISTORY</h4>
@@ -869,7 +794,7 @@ function renderAgents(ctx) {
 
 /* ── F3 · activity wire: registry-driven, opens with the full-economics test ── */
 
-const FEED_ICONS = { swap: "⇄", payout: "$", vesting: "◐" };
+const FEED_ICONS = { swap: "⇄", payout: "$" };
 
 /* ── wire filters + grouping state ── */
 
@@ -877,7 +802,6 @@ const FEED_FILTERS = [
   { id: "all",     label: "ALL" },
   { id: "swaps",   label: "SWAPS",   types: ["swap"] },
   { id: "payouts", label: "PAYOUTS", types: ["payout"] },
-  { id: "vesting", label: "VESTING", types: ["vesting"] },
 ];
 let feedFilter = "all";
 let feedCtx = null;
