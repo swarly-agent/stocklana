@@ -460,7 +460,7 @@ footer {
 #p-overview { grid-column: span 12; }
 #p-agents   { grid-column: span 7; }
 #p-feed     { grid-column: span 5; }
-#p-bounties { grid-column: span 12; }
+#p-yield     { grid-column: span 12; }
 
 /* ── collapsible agent cards ── */
 .agent-card { cursor: default; }
@@ -566,7 +566,7 @@ footer {
 .group-body { display: none; border-top: 1px solid var(--border); padding: 4px 10px 8px; }
 .feed-group.open .group-body { display: block; }
 
-/* ── bounty board sections ── */
+/* ── board sections (yield, generic) ── */
 .board-sec { margin-bottom: 16px; }
 .board-sec:last-child { margin-bottom: 0; }
 .board-sec > h3 {
@@ -592,7 +592,7 @@ footer {
 
 /* ── responsive (v2) ── */
 @media (max-width: 1200px) {
-  #p-overview, #p-agents, #p-feed, #p-bounties { grid-column: span 12; }
+  #p-overview, #p-agents, #p-feed, #p-yield { grid-column: span 12; }
   .feed-item { grid-template-columns: 76px 80px 1fr; }
 }
 @media (max-width: 640px) {
@@ -678,3 +678,83 @@ footer {
 
 /* ══════════ FOOTER: snapshot-rendered vault links ══════════ */
 .foot-vaults { display: inline-flex; gap: 18px; flex-wrap: wrap; }
+
+/* ══════════ F4 · YIELD ══════════ */
+
+/* hero stat strip — the keeper's headline numbers */
+.yield-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.yh-stat {
+  background: #000;
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--green);
+  padding: 10px 12px;
+  min-width: 0;
+}
+.yh-stat .ov-v { font-size: 20px; }
+.yh-stat .ov-sub { margin-top: 6px; }
+
+/* two-column detail grid under the hero */
+.yield-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.yield-detail .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  border-bottom: 1px dotted var(--border);
+  padding: 4px 0;
+  font-size: 11px;
+}
+.yield-detail .row:last-child { border-bottom: none; }
+.yield-detail .k {
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.yield-detail .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* pnl coloring */
+.pnl-pos { color: var(--green); }
+.pnl-neg { color: var(--red); }
+
+/* lead pool row (the keeper's pool) */
+tr.lead-row td { background: rgba(255, 160, 40, 0.05); }
+
+/* halted pill */
+.pill.halted {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(255, 82, 82, 0.08);
+}
+
+/* horizontal scroll for wide tables on small screens */
+.table-scroll { overflow-x: auto; }
+.table-scroll table.term { min-width: 640px; }
+
+/* honesty footnote under the yield panels */
+.yield-foot { margin-top: 10px; }
+
+/* section headers: tighter, consistent rhythm */
+.board-sec > h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .yield-cols { grid-template-columns: 1fr; }
+  .yield-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .yh-stat .ov-v { font-size: 17px; }
+}

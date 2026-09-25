@@ -316,11 +316,6 @@ function vaultUsd(vault, ctx) {
     + tokenBalance(vault, SPCX_MINT) * ctx.spcxMark
     + (vault.sol ?? 0) * (ctx.solMark ?? 0);
 }
-function bountyUsd(b) {
-  const p = b.payout ?? {};
-  return (p.usdc ?? 0) + (p.spcxVesting ?? 0);
-}
-
 /* ───────────────────────── data boot ───────────────────────── */
 
 async function fetchJson(path) {
@@ -976,53 +971,195 @@ function renderFeed(ctx) {
     : `<div class="feed-filters" role="group" aria-label="filter activity">${chips}</div>${emptyNote}`;
 }
 
-/* ── F4 · bounty board ── */
+/* ── F4 · yield ── */
 
-function renderBounties(ctx) {
-  const paid = ctx.bounties.filter((b) => String(b.status).toLowerCase() === "paid");
-  const open = ctx.bounties.filter((b) => String(b.status).toLowerCase() !== "paid");
-  $("bounties-meta").textContent = `${paid.length}/${ctx.bounties.length} paid · verifier: program operator`;
+// Keeper + pool data contract (dashboard/yield.json, written by the keeper export script):
+// { updatedTs,   // ms epoch, like keeper receipts.jsonl
+//   keeper: { mode:"paper"|"live", deployedCapitalUsd, currentValueUsd, totalPnlUsd,
+//             totalPnlPct, feesUsd, feesX, feesY, inventoryPnlUsd, txCostUsd,
+//             position: { centerBin, lowerBin, upperBin, centerPrice, priceLow, priceHigh,
+//                         halfWidthPct, widenFactor, positionAddress },
+//             recenters, lastCheckTs,   // ms epoch
+//             killState },
+//   benchmarks: { buyHold, staticWide, rebal5050, dailyRecenter },
+//   pools: [ { venue, pair, address, binStepBps, tvlUsd, volume24hUsd, fees24hUsd,
+//              apyPct, asOf, source, keeperPool } ] }
+// Missing/unreadable file → clean "keeper opening soon" state. Every figure is
+// defensive: absent values render "—", never NaN/undefined.
 
-  const paidRows = paid.map((b) => {
-    const p = b.payout ?? {};
-    const matchUsd = (p.spcxVesting ?? 0) * ((p.matchBps ?? 0) / 10000);
+const YIELD_URL = "yield.json";
+let yieldDoc = null;
+let yieldTried = false;
+
+const yNum = (v) => {
+  const n = Number(v);
+  return (v == null || v === "" || isNaN(n)) ? null : n;
+};
+const yPnl = (n) => {
+  const v = yNum(n);
+  if (v == null) return "—";
+  const cls = v > 0 ? "pnl-pos" : v < 0 ? "pnl-neg" : "";
+  return `<span class="${cls}">${v > 0 ? "+" : ""}${fmtUsd(v)}</span>`;
+};
+
+// Fallback pool row — figures checked 2026-09-25 ~09:00 ET via GeckoTerminal
+// (reserve $4.80M / 24h vol $2.72M) plus the keeper's SDK pool read
+// (TVL $4.79M / 24h fees $5,772). Superseded by yield.json when present.
+const FALLBACK_POOLS = [{
+  venue: "Meteora DLMM",
+  pair: "MU/USDC",
+  address: "13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5",
+  binStepBps: 20,
+  tvlUsd: 4800894,
+  volume24hUsd: 2715795,
+  fees24hUsd: 5772,
+  apyPct: null, // derived below from fees24h/tvl
+  asOf: "2026-09-25 09:00 ET",
+  source: "GeckoTerminal + keeper pool read",
+  keeperPool: true,
+}];
+
+function poolRowsHtml(pools) {
+  return pools.map((p) => {
+    const tvl = yNum(p.tvlUsd), vol = yNum(p.volume24hUsd), fees = yNum(p.fees24hUsd);
+    let apy = yNum(p.apyPct);
+    if (apy == null && tvl && fees) apy = (fees / tvl) * 365 * 100;
+    return `<tr${p.keeperPool ? ' class="lead-row"' : ""}>
+      <td><strong>${esc(p.venue ?? "—")}</strong>${p.keeperPool ? ' <span class="pill active">KEEPER</span>' : ""}</td>
+      <td><strong>${esc(p.pair ?? "—")}</strong></td>
+      <td class="num">${fmtUsd(tvl, 0)}</td>
+      <td class="num">${fmtUsd(vol, 0)}</td>
+      <td class="num">${apy == null ? "—" : apy.toFixed(1) + "%"} <span class="dim small">est.</span></td>
+      <td class="num">${p.binStepBps != null ? esc(p.binStepBps) + " bps" : "—"}</td>
+      <td>${p.address ? addrCell(p.address) : "—"}</td>
+    </tr>`;
+  }).join("");
+}
+
+const BENCH_LABELS = {
+  buyHold: "Buy & hold",
+  staticWide: "Static wide LP",
+  rebal5050: "50/50 periodic rebalance",
+  dailyRecenter: "Manual daily recenter",
+};
+
+function keeperHtml(k) {
+  const mode = String(k.mode ?? "paper").toLowerCase();
+  const live = mode === "live";
+  const halted = k.killState != null && String(k.killState).toLowerCase() !== "active";
+  const pill = halted
+    ? `<span class="pill halted">HALTED</span>`
+    : live
+      ? `<span class="pill active">LIVE · ON-CHAIN</span>`
+      : `<span class="pill open">PAPER · SIMULATED</span>`;
+  const dep = yNum(k.deployedCapitalUsd), val = yNum(k.currentValueUsd);
+  const pnl = yNum(k.totalPnlUsd);
+  let pnlPct = yNum(k.totalPnlPct);
+  if (pnlPct == null && pnl != null && dep) pnlPct = (pnl / dep) * 100;
+  const fees = yNum(k.feesUsd), fx = yNum(k.feesX), fy = yNum(k.feesY);
+  const inv = yNum(k.inventoryPnlUsd), txc = yNum(k.txCostUsd);
+  const pos = (k.position && typeof k.position === "object") ? k.position : {};
+  const range = (pos.lowerBin != null && pos.upperBin != null)
+    ? `bins ${esc(pos.lowerBin)}–${esc(pos.upperBin)}`
+    : "—";
+  const band = (pos.priceLow != null && pos.priceHigh != null)
+    ? `${fmtUsd(yNum(pos.priceLow))} – ${fmtUsd(yNum(pos.priceHigh))}`
+    : (pos.centerPrice != null ? `@ ${fmtUsd(yNum(pos.centerPrice))}` : "—");
+  const width = yNum(pos.halfWidthPct);
+  const bench = (k.bench && typeof k.bench === "object")
+    ? k.bench
+    : ((yieldDoc && yieldDoc.benchmarks) || {});
+  const benchRows = Object.keys(BENCH_LABELS).map((key) => {
+    const v = yNum(bench[key]);
+    const d = (v != null && val != null) ? v - val : null;
     return `<tr>
-      <td><code>${esc(b.id)}</code></td>
-      <td><strong>${esc(b.title)}</strong><br><span class="muted small">${esc(b.acceptanceCriteria ?? "")}</span>
-        ${b.note ? `<br><span class="dim small">◈ ${esc(b.note)}</span>` : ""}</td>
-      <td class="num"><span style="color:var(--green)">${fmtUsd(p.usdc)} USDC</span><br>
-        <span style="color:var(--amber)">${fmtUsd(p.spcxVesting)} SPCX</span> <span class="dim">vested</span><br>
-        <span class="dim small">+${fmtUsd(matchUsd)} match · −${((p.feeBps ?? 0) / 100).toFixed(0)}% fee</span></td>
-      <td><span class="pill paid">PAID</span></td>
-      <td><span class="muted small">${esc(b.claimant ?? "")}</span><br>${txLink(b.payoutTx)}<br>
-        ${b.evidenceUrl ? `<a href="${esc(b.evidenceUrl)}" target="_blank" rel="noopener" class="small">evidence ↗</a>` : ""}</td>
+      <td>${BENCH_LABELS[key]} <span class="dim small">est.</span></td>
+      <td class="num">${fmtUsd(v)}</td>
+      <td class="num">${d == null ? "—" : yPnl(d)}</td>
     </tr>`;
   }).join("");
 
-  const openRows = open.map((b) => {
-    const p = b.payout ?? {};
-    return `<tr>
-      <td><code>${esc(b.id)}</code></td>
-      <td><strong>${esc(b.title)}</strong><br><span class="muted small">${esc(b.acceptanceCriteria ?? "")}</span></td>
-      <td class="num"><span style="color:var(--green)">${fmtUsd(p.usdc)} USDC</span><br>
-        <span style="color:var(--amber)">${fmtUsd(p.spcxVesting)} SPCX</span> <span class="dim">vested</span></td>
-      <td><span class="pill open">OPEN</span></td>
-      <td><div class="claim-box">${esc(b.howToClaim ?? "")}<br><br>
-        <a href="${REPO_URL}" target="_blank" rel="noopener">OPEN A PR ↗</a> <span class="dim">— first merged wins</span></div></td>
-    </tr>`;
-  }).join("");
-
-  $("bounties-body").innerHTML = `
-    <div class="board-sec">
-      <h3><span style="color:var(--amber)">▸ OPEN</span><span class="count">${open.length} bounties · claimable now</span></h3>
-      ${open.length ? `<table class="term"><thead><tr><th>ID</th><th>BOUNTY</th><th class="num">PAYOUT</th><th>STATUS</th><th>CLAIM</th></tr></thead><tbody>${openRows}</tbody></table>`
-        : `<p class="empty-note">no open bounties right now.</p>`}
+  return `
+  <div class="board-sec">
+    <h3><span style="color:var(--green)">▸ KEEPER PERFORMANCE</span><span class="count">${pill}</span></h3>
+    <div class="yield-hero">
+      <div class="yh-stat"><span class="ov-k">DEPLOYED</span><span class="ov-v">${fmtUsd(dep)}</span></div>
+      <div class="yh-stat"><span class="ov-k">CURRENT VALUE</span><span class="ov-v">${fmtUsd(val)}</span></div>
+      <div class="yh-stat"><span class="ov-k">TOTAL PNL</span><span class="ov-v">${yPnl(pnl)}${pnlPct == null ? "" : ` <span class="dim small">(${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)</span>`}</span></div>
+      <div class="yh-stat"><span class="ov-k">FEES EARNED</span><span class="ov-v">${fmtUsd(fees, 4)}</span>
+        <div class="ov-sub"><div class="row"><span>MU</span><span class="num">${fmtTok(fx)}</span></div>
+        <div class="row"><span>USDC</span><span class="num">${fmtTok(fy)}</span></div></div></div>
     </div>
+    <div class="yield-cols">
+      <div class="yield-detail">
+        <div class="row"><span class="k">INVENTORY PNL EX-FEES</span><span class="num">${yPnl(inv)}</span></div>
+        <div class="row"><span class="k">TRANSACTION COSTS</span><span class="num">${fmtUsd(txc)}</span></div>
+        <div class="row"><span class="k">RECENTERS</span><span class="num">${k.recenters != null ? esc(k.recenters) : "—"}</span></div>
+        <div class="row"><span class="k">LAST CHECK</span><span class="num">${k.lastCheckTs ? etFull(Math.floor(Number(k.lastCheckTs) / 1000)) + " ET" : "—"}</span></div>
+      </div>
+      <div class="yield-detail">
+        <div class="row"><span class="k">POSITION RANGE</span><span class="num">${range}</span></div>
+        <div class="row"><span class="k">PRICE BAND</span><span class="num">${band}</span></div>
+        <div class="row"><span class="k">HALF-WIDTH</span><span class="num">${width == null ? "—" : "±" + width.toFixed(2) + "%"}</span></div>
+        <div class="row"><span class="k">POSITION ADDRESS</span><span class="num">${pos.positionAddress ? addrCell(pos.positionAddress) : (live ? "—" : '<span class="dim">n/a · paper</span>')}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="board-sec">
+    <h3><span style="color:var(--blue)">▸ BENCHMARKS</span><span class="count">same capital · same price marks · est.</span></h3>
+    <div class="table-scroll"><table class="term">
+      <thead><tr><th>PORTFOLIO</th><th class="num">VALUE</th><th class="num">VS KEEPER</th></tr></thead>
+      <tbody>${benchRows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function renderYield() {
+  const body = $("yield-body"), meta = $("yield-meta");
+  if (!body) return;
+  if (!yieldTried) {
+    body.innerHTML = `<p class="loading">loading keeper…</p>`;
+    if (meta) meta.textContent = "";
+    return;
+  }
+  const doc = yieldDoc;
+  const pools = (doc && Array.isArray(doc.pools) && doc.pools.length) ? doc.pools : FALLBACK_POOLS;
+  const poolNote = (doc && Array.isArray(doc.pools) && doc.pools.length)
+    ? `updated ${et(Math.floor(doc.updatedTs / 1000))} ET`
+    : `checked 2026-09-25 ~09:00 ET · GeckoTerminal + keeper pool read`;
+  const k = doc && doc.keeper && typeof doc.keeper === "object" ? doc.keeper : null;
+
+  let html = `
     <div class="board-sec">
-      <h3><span style="color:var(--green)">▸ COMPLETED</span><span class="count">${paid.length} paid out</span></h3>
-      ${paid.length ? `<table class="term"><thead><tr><th>ID</th><th>BOUNTY</th><th class="num">PAYOUT</th><th>STATUS</th><th>CLAIMANT</th></tr></thead><tbody>${paidRows}</tbody></table>`
-        : `<p class="empty-note">no completed bounties yet.</p>`}
+      <h3><span style="color:var(--amber)">▸ POOLS</span><span class="count">${pools.length} tracked · ${esc(poolNote)}</span></h3>
+      <div class="table-scroll"><table class="term">
+        <thead><tr><th>VENUE</th><th>PAIR</th><th class="num">TVL</th><th class="num">24H VOLUME</th><th class="num">EST. APY</th><th class="num">BIN STEP</th><th>POOL</th></tr></thead>
+        <tbody>${poolRowsHtml(pools)}</tbody>
+      </table></div>
     </div>`;
+  html += k
+    ? keeperHtml(k)
+    : `<div class="board-sec">
+        <h3><span style="color:var(--green)">▸ KEEPER PERFORMANCE</span></h3>
+        <p class="empty-note">KEEPER OPENING SOON — performance goes live with the first position.</p>
+      </div>`;
+  html += `<p class="dim small yield-foot">Est. APY is derived from 24h fees — not a promise. Paper figures are simulated estimates; only on-chain-verified figures are labeled live.</p>`;
+  body.innerHTML = html;
+  if (meta) {
+    meta.textContent = k
+      ? `keeper: ${String(k.mode ?? "paper")} · updated ${et(Math.floor(doc.updatedTs / 1000))} ET`
+      : "pools tracked · keeper opening soon";
+  }
+}
+
+async function loadYield() {
+  try {
+    const r = await fetch(YIELD_URL, { cache: "no-store" });
+    const j = r.ok ? await r.json() : null;
+    yieldDoc = (j && typeof j === "object") ? j : null;
+  } catch (e) { yieldDoc = null; }
+  yieldTried = true;
+  renderYield();
 }
 
 /* ───────────────────────── chrome ───────────────────────── */
@@ -1209,7 +1346,9 @@ async function boot() {
   renderOverview(ctx);
   renderAgents(ctx);
   renderFeed(ctx);
-  renderBounties(ctx);
+  renderYield();
+  loadYield();
+  setInterval(() => { if (!document.hidden) loadYield(); }, 60000);
   renderFooterVaults(ctx);
 
   // Live quote feed (independent of RPC tier): immediate fetch, then

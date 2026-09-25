@@ -1,0 +1,50 @@
+{
+  "updatedTs": 1790341322161,
+  "keeper": {
+    "mode": "paper",
+    "deployedCapitalUsd": 100,
+    "currentValueUsd": 100,
+    "totalPnlUsd": 0,
+    "totalPnlPct": 0,
+    "feesUsd": 0,
+    "feesX": 0.0000016326877218590618,
+    "feesY": 0.0017851056687798973,
+    "inventoryPnlUsd": 0,
+    "txCostUsd": 0,
+    "position": {
+      "centerBin": 3502,
+      "lowerBin": 3479,
+      "upperBin": 3525,
+      "centerPrice": 1093.35,
+      "priceLow": 1044.25,
+      "priceHigh": 1144.77,
+      "halfWidthPct": 4.6,
+      "widenFactor": 1.5,
+      "positionAddress": null
+    },
+    "recenters": 0,
+    "lastCheckTs": 1790328965412,
+    "killState": "active"
+  },
+  "benchmarks": {
+    "buyHold": 100,
+    "staticWide": 100,
+    "rebal5050": 100,
+    "dailyRecenter": 100
+  },
+  "pools": [
+    {
+      "venue": "Meteora DLMM",
+      "pair": "MU/USDC",
+      "address": "13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5",
+      "binStepBps": 20,
+      "tvlUsd": 4800894,
+      "volume24hUsd": 2715795,
+      "fees24hUsd": 5772,
+      "apyPct": null,
+      "asOf": "2026-09-25T13:02:02.161Z",
+      "source": "GeckoTerminal + keeper pool read",
+      "keeperPool": true
+    }
+  ]
+}
