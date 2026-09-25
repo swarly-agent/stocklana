@@ -544,18 +544,6 @@ function renderTapes(ctx) {
   });
 }
 
-/* ── footer: vault links rendered from the snapshot, never hardcoded ── */
-
-function renderFooterVaults(ctx) {
-  const el = $("foot-vaults");
-  if (!el) return;
-  el.innerHTML = (ctx.agents ?? []).map((a) => {
-    const label = String(a.id ?? a.key).toUpperCase();
-    const addr = a.vaultPda ?? a.key;
-    return `<a href="https://solscan.io/account/${esc(addr)}" target="_blank" rel="noopener">${esc(label)} VAULT</a>`;
-  }).join("");
-}
-
 /* ── F1 · exchange overview ── */
 
 /** Short uppercase label for an agent vault key, from the snapshot agent list. */
@@ -1020,9 +1008,9 @@ function poolRowsHtml(pools) {
     const row = `<tr${p.keeperPool ? ' class="lead-row"' : ""}${hasKeeper ? ` style="cursor:pointer" onclick="toggleKeeperRow('${addr8}')" title="Click to expand keeper performance"` : ""}>
       <td><strong>${esc(p.venue ?? "—")}</strong>${p.keeperPool ? ' <span class="pill active">KEEPER ACTIVE</span>' : ""}${hasKeeper ? ' <span class="dim small">▾</span>' : ""}</td>
       <td><strong>${esc(p.pair ?? "—")}</strong></td>
-      <td class="num">${fmtUsd(tvl, 0)}</td>
-      <td class="num">${vol == null ? '<span class="dim">—</span>' : fmtUsd(vol, 0)}</td>
-      <td class="num">${p.binStepBps != null ? esc(p.binStepBps) + " bps" : "—"}</td>
+      <td class="num-ctr">${fmtUsd(tvl, 0)}</td>
+      <td class="num-ctr">${vol == null ? '<span class="dim">—</span>' : fmtUsd(vol, 0)}</td>
+      <td class="num-ctr">${p.binStepBps != null ? esc(p.binStepBps) + " bps" : "—"}</td>
       <td>${p.address ? addrCell(p.address) : "—"}</td>
     </tr>`;
     return row + (hasKeeper ? poolKeeperDropdownHtml(p.address) : "");
@@ -1121,7 +1109,7 @@ function renderYield() {
     <div class="board-sec">
       <h3><span style="color:var(--amber)">▸ POOLS</span><span class="count">${pools.length} tracked · ${esc(poolNote)}</span></h3>
       <div class="table-scroll"><table class="term">
-        <thead><tr><th>VENUE</th><th>PAIR</th><th class="num">TVL</th><th class="num">24H VOLUME</th><th class="num">BIN STEP</th><th>POOL</th></tr></thead>
+        <thead><tr><th>VENUE</th><th>PAIR</th><th class="num-ctr">TVL</th><th class="num-ctr">24H VOLUME</th><th class="num-ctr">BIN STEP</th><th>POOL</th></tr></thead>
         <tbody>${poolRowsHtml(pools)}</tbody>
       </table></div>
     </div>`;
@@ -1327,7 +1315,6 @@ async function boot() {
   renderYield();
   loadYield();
   setInterval(() => { if (!document.hidden) loadYield(); }, 60000);
-  renderFooterVaults(ctx);
 
   // Live quote feed (independent of RPC tier): immediate fetch, then
   // self-scheduling with backoff — upgrades the SPCX mark + stocks tape.
