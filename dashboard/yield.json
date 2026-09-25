@@ -1,36 +1,42 @@
 {
-  "updatedTs": 1790341322161,
+  "updatedTs": 1790348041269,
   "keeper": {
-    "mode": "paper",
+    "mode": "live",
     "deployedCapitalUsd": 100,
-    "currentValueUsd": 100,
-    "totalPnlUsd": 0,
-    "totalPnlPct": 0,
-    "feesUsd": 0,
-    "feesX": 0.0000016326877218590618,
-    "feesY": 0.0017851056687798973,
+    "currentValueUsd": 98.01,
+    "totalPnlUsd": -1.99,
+    "totalPnlPct": -1.99,
+    "feesUsd": 0.01,
+    "feesX": 0,
+    "feesY": 0.008118,
     "inventoryPnlUsd": 0,
     "txCostUsd": 0,
     "position": {
-      "centerBin": 3502,
-      "lowerBin": 3479,
-      "upperBin": 3525,
-      "centerPrice": 1093.35,
-      "priceLow": 1044.25,
-      "priceHigh": 1144.77,
-      "halfWidthPct": 4.6,
-      "widenFactor": 1.5,
-      "positionAddress": null
+      "centerBin": 3497,
+      "lowerBin": 3487,
+      "upperBin": 3507,
+      "centerPrice": 1082.49,
+      "priceLow": 1061.07,
+      "priceHigh": 1104.33,
+      "halfWidthPct": 3.8,
+      "widenFactor": 1,
+      "positionAddress": "J3BRDm4HKG7Ni6Eo6SEWLLeuKzdEPfXW2FAvG59pieSp",
+      "openTx": "4XjBMScABjmReYBbuytBbJCLQiBpUbVsZvzG9DEVuKRukVzubYdpT5k74RZdk9NX6r5gAFfXxYjiMYJ5vpg6bFye"
     },
     "recenters": 0,
-    "lastCheckTs": 1790328965412,
-    "killState": "active"
+    "lastCheckTs": 1790347989310,
+    "killState": "active",
+    "status": "live position, monitoring (automation validated, no recenter yet)",
+    "inventoryX": 0.046209,
+    "inventoryY": 47.985489,
+    "poolPrice": 1082.49
   },
   "benchmarks": {
-    "buyHold": 100,
-    "staticWide": 100,
-    "rebal5050": 100,
-    "dailyRecenter": 100
+    "buyHold": null,
+    "staticWide": null,
+    "rebal5050": null,
+    "dailyRecenter": null,
+    "note": "Live benchmarks initialize at position open; reference portfolios track from the open onward."
   },
   "pools": [
     {
@@ -42,7 +48,7 @@
       "volume24hUsd": 2715795,
       "fees24hUsd": 5772,
       "apyPct": null,
-      "asOf": "2026-09-25T13:02:02.161Z",
+      "asOf": "2026-09-25T14:55:00Z",
       "source": "GeckoTerminal + keeper pool read",
       "keeperPool": true
     }
