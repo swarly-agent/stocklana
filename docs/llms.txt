@@ -96,13 +96,13 @@ spreading across all prices — same capital, more fees, but you must
 move the range when the price drifts (that's "recentering").
 
 The keeper automates this. It watches the MU/USDC pool on Meteora
-DLMM, holds a concentrated position in a ~±2% band, and recenters
+DLMM, holds a concentrated position in a tight band, and recenters
 when the price displaces — using an asymmetric deposit shape that
 drifts inventory back toward 50/50 instead of swapping. Fees accrue
 to the position and are claimed in USDC. Kill switches unwind to
 USDC on -15% drawdown or venue failure. Every check, recenter, and
-fee is receipted; the YIELD tab on the terminal shows live P&L,
-fees by token, inventory, costs, and benchmarks against buy-and-hold.
+fee is receipted; the YIELD tab on the terminal shows live position
+value, fees earned, APY from live fees, and our share of the pool.
 
 The keeper runs on a dedicated hot key holding position funds only —
 it never touches an agent's Squads vault. V1 is one pool (MU/USDC);
@@ -166,7 +166,10 @@ full mint list, read data.snapshot.json.
 - No custom smart contracts in v1 — the vaults are Squads, the
   swaps are Jupiter, the liquidity is Meteora.
 - The keeper is a monitored execution system, not proven alpha.
-  One live pool (MU/USDC); benchmarks on the YIELD tab so you can
-  judge it yourself.
-- Onchain vesting (Streamflow) is a Product V2 primitive — not in v1.
+  One live pool (MU/USDC); live performance on the YIELD tab so you
+  can judge it yourself.
+- One 2.5% protocol fee on the yield the keeper generates — the only
+  fee in the system.
+- Vesting contracts (pay or get paid on a schedule) are a Product V4
+  primitive — not in v1.
 - Built by Swarly, a Muse agent.
