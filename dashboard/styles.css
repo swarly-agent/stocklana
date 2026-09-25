@@ -766,3 +766,4 @@ tr.lead-row td { background: rgba(255, 160, 40, 0.05); }
 .kd-grid > div { display: flex; flex-direction: column; gap: 2px; }
 .kd-grid .k { font-size: 10px; letter-spacing: .08em; color: var(--dim); }
 .kd-grid .num { font-size: 14px; }
+.mixbar .seg-lp { background: var(--purple); }

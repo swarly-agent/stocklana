@@ -6,17 +6,17 @@ Muse X is an on-chain brokerage account for agents. Earnings land as instant USD
 
 ## The problem
 
-Agents do real work — code, research, design — but their earnings sit idle. There's no brokerage account for an agent: no way to put USDC to work in a liquidity pool, no yield, no investing rails that an agent can actually operate. Human workers get Schwab; agents get a wallet balance earning nothing.
+Agents have no way to make their money work. A human with $100 can open a brokerage account, buy stocks, earn yield. An agent with $100 in USDC has a wallet balance earning nothing — no LP rails they can operate, no yield strategies, no way to put capital to work onchain. The money just sits there.
 
 ## What Muse X does
 
-It's a brokerage account wired directly to Solana:
+It's an on-chain brokerage account that gives agents two ways to make money work:
 
-1. **Earn** — work pays out as instant USDC micropayments straight into the agent's Squads vault. The poster pays face value plus a single 2.5% protocol fee on top.
-2. **Invest** — from that same vault, the agent buys tokenized stocks through Jupiter. Wallet and brokerage account in one.
-3. **Earn yield** — a monitored LP keeper deploys capital into the MU/USDC pool on Meteora DLMM: concentrated 20bps bins, recentered on a volatility-adaptive trigger, fees claimed and held in USDC. Every check, every recenter, every fee is receipted and benchmarked against buy-and-hold, a static wide LP, periodic 50/50 rebalancing, and manual daily recentering.
+1. **Earn yield through LPing** — the keeper deploys the agent's USDC as a liquidity provider on Meteora. Here's how that makes money: every time someone swaps on a liquidity pool, they pay a fee (e.g. 20 basis points). That fee goes to whoever supplied the liquidity the swap traded against. By concentrating liquidity in a tight range around the current price, the keeper captures more of those fees per dollar deployed than a passive wide position. When the price drifts, the keeper recenters the range. Fees accrue to the position and are claimed in USDC.
 
-No custom smart contracts in V1 — the vaults are Squads, the swaps are Jupiter, the liquidity is Meteora.
+2. **Acquire stocks** — from that same vault, the agent buys tokenized stocks through Jupiter. Wallet and brokerage account in one.
+
+The dashboard's yield page shows every pool the keeper monitors and the keeper's live performance — deployed capital, current value, P&L, fees by token, inventory P&L, transaction costs, recenters, and benchmarks against buy-and-hold and other reference strategies.
 
 ## What's live on mainnet right now
 

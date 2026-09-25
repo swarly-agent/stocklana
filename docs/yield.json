@@ -1,5 +1,5 @@
 {
-  "updatedTs": 1790348041269,
+  "updatedTs": 1790350758019,
   "keeper": {
     "mode": "live",
     "deployedCapitalUsd": 100,
@@ -9,8 +9,8 @@
     "feesUsd": 0.01,
     "feesX": 0,
     "feesY": 0.008118,
-    "inventoryPnlUsd": 0,
-    "txCostUsd": 0,
+    "inventoryPnlUsd": -2.0,
+    "txCostUsd": 8.38,
     "position": {
       "centerBin": 3497,
       "lowerBin": 3487,
@@ -29,14 +29,18 @@
     "status": "live position, monitoring (automation validated, no recenter yet)",
     "inventoryX": 0.046209,
     "inventoryY": 47.985489,
-    "poolPrice": 1082.49
+    "poolPrice": 1082.49,
+    "txCostNote": "~0.04191 SOL @ ~$200/SOL (est.); paid from gas allocation, not deployed capital"
   },
   "benchmarks": {
-    "buyHold": null,
+    "buyHold": 100.0,
+    "buyHoldNote": "$100 MU held from open ($1082.49) to now ($1082.49)",
     "staticWide": null,
+    "staticWideNote": "Pending: requires historical LP simulation",
     "rebal5050": null,
+    "rebal5050Note": "Pending: requires historical LP simulation",
     "dailyRecenter": null,
-    "note": "Live benchmarks initialize at position open; reference portfolios track from the open onward."
+    "dailyRecenterNote": "Pending: requires historical LP simulation"
   },
   "pools": [
     {
@@ -48,9 +52,116 @@
       "volume24hUsd": 2715795,
       "fees24hUsd": 5772,
       "apyPct": null,
-      "asOf": "2026-09-25T14:55:00Z",
+      "asOf": "2026-09-25T15:40:00Z",
       "source": "GeckoTerminal + keeper pool read",
       "keeperPool": true
+    },
+    {
+      "venue": "Raydium",
+      "pair": "SOL/USDC",
+      "address": "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2",
+      "binStepBps": null,
+      "tvlUsd": 38099633,
+      "volume24hUsd": 13119289,
+      "fees24hUsd": null,
+      "apyPct": null,
+      "asOf": "2026-09-25T15:40:00Z",
+      "source": "GeckoTerminal",
+      "keeperPool": false
+    },
+    {
+      "venue": "Orca",
+      "pair": "SOL/USDC",
+      "address": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE",
+      "binStepBps": null,
+      "tvlUsd": 26443432,
+      "volume24hUsd": 195658432,
+      "fees24hUsd": null,
+      "apyPct": null,
+      "asOf": "2026-09-25T15:40:00Z",
+      "source": "GeckoTerminal",
+      "keeperPool": false
+    },
+    {
+      "venue": "Raydium",
+      "pair": "PUMP/USDC",
+      "address": "2uF4Xh61rDwxnG9woyxsVQP7zuA6kLFpb3NvnRQeoiSd",
+      "binStepBps": null,
+      "tvlUsd": 22065376,
+      "volume24hUsd": 9932904,
+      "fees24hUsd": null,
+      "apyPct": null,
+      "asOf": "2026-09-25T15:40:00Z",
+      "source": "GeckoTerminal",
+      "keeperPool": false
+    },
+    {
+      "venue": "Meteora DLMM",
+      "pair": "BP/USDC",
+      "address": "6qz7THwQvcjF3HyDGLuKaLBUk6EyJKeZXZMWLAeiwfjd",
+      "binStepBps": 20,
+      "tvlUsd": 5697629,
+      "volume24hUsd": 26070909,
+      "fees24hUsd": null,
+      "apyPct": null,
+      "asOf": "2026-09-25T15:40:00Z",
+      "source": "GeckoTerminal",
+      "keeperPool": false
+    },
+    {
+      "venue": "Orca",
+      "pair": "USDC/SOL",
+      "address": "Gf7sXMoP8iRw4iiXmJ1nq4vxcRycbGXy5RL8a8LnTd3v",
+      "binStepBps": null,
+      "tvlUsd": 4681535,
+      "volume24hUsd": 6569049,
+      "fees24hUsd": null,
+      "apyPct": null,
+      "asOf": "2026-09-25T15:40:00Z",
+      "source": "GeckoTerminal",
+      "keeperPool": false
+    },
+    {
+      "venue": "Raydium",
+      "pair": "STONK/SOL",
+      "address": "zxTpi4BtaWX3mgdAPoezkMD1hxx8CdeCfrqXMWvSCLX",
+      "binStepBps": null,
+      "tvlUsd": 3258416,
+      "volume24hUsd": 12513301,
+      "fees24hUsd": null,
+      "apyPct": null,
+      "asOf": "2026-09-25T15:40:00Z",
+      "source": "GeckoTerminal",
+      "keeperPool": false
     }
-  ]
+  ],
+  "keeperByPool": {
+    "13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5": {
+      "mode": "live",
+      "deployedCapitalUsd": 100,
+      "currentValueUsd": 98.01,
+      "totalPnlUsd": -1.99,
+      "totalPnlPct": -1.99,
+      "feesUsd": 0.01,
+      "feesX": 0,
+      "feesY": 0.008118,
+      "inventoryX": 0.046209,
+      "inventoryY": 47.985489,
+      "position": {
+        "centerBin": 3497,
+        "lowerBin": 3487,
+        "upperBin": 3507,
+        "centerPrice": 1082.49,
+        "priceLow": 1061.07,
+        "priceHigh": 1104.33,
+        "halfWidthPct": 3.8,
+        "widenFactor": 1,
+        "positionAddress": "J3BRDm4HKG7Ni6Eo6SEWLLeuKzdEPfXW2FAvG59pieSp",
+        "openTx": "4XjBMScABjmReYBbuytBbJCLQiBpUbVsZvzG9DEVuKRukVzubYdpT5k74RZdk9NX6r5gAFfXxYjiMYJ5vpg6bFye"
+      },
+      "recenters": 0,
+      "lastCheckTs": 1790347989310,
+      "killState": "active"
+    }
+  }
 }

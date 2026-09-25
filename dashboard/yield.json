@@ -9,8 +9,8 @@
     "feesUsd": 0.01,
     "feesX": 0,
     "feesY": 0.008118,
-    "inventoryPnlUsd": 0,
-    "txCostUsd": 0,
+    "inventoryPnlUsd": -2.0,
+    "txCostUsd": 8.38,
     "position": {
       "centerBin": 3497,
       "lowerBin": 3487,
@@ -29,14 +29,18 @@
     "status": "live position, monitoring (automation validated, no recenter yet)",
     "inventoryX": 0.046209,
     "inventoryY": 47.985489,
-    "poolPrice": 1082.49
+    "poolPrice": 1082.49,
+    "txCostNote": "~0.04191 SOL @ ~$200/SOL (est.); paid from gas allocation, not deployed capital"
   },
   "benchmarks": {
-    "buyHold": null,
+    "buyHold": 100.0,
+    "buyHoldNote": "$100 MU held from open ($1082.49) to now ($1082.49)",
     "staticWide": null,
+    "staticWideNote": "Pending: requires historical LP simulation",
     "rebal5050": null,
+    "rebal5050Note": "Pending: requires historical LP simulation",
     "dailyRecenter": null,
-    "note": "Live benchmarks initialize at position open; reference portfolios track from the open onward."
+    "dailyRecenterNote": "Pending: requires historical LP simulation"
   },
   "pools": [
     {

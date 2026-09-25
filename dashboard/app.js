@@ -505,7 +505,9 @@ function totals(ctx) {
   const spcx = tokenBalance(t, SPCX_MINT) + agents.reduce((s, v) => s + tokenBalance(v, SPCX_MINT), 0);
   const sol = (t.sol ?? 0) + agents.reduce((s, v) => s + (v.sol ?? 0), 0);
   const solMark = ctx.solMark ?? 0;
-  return { usdc, spcx, sol, usd: usdc + spcx * ctx.spcxMark + sol * solMark };
+  // Keeper LP positions count toward AUM (from yield.json)
+  const lpUsd = (yieldDoc && yieldDoc.keeper && yNum(yieldDoc.keeper.currentValueUsd)) || 0;
+  return { usdc, spcx, sol, lpUsd, usd: usdc + spcx * ctx.spcxMark + sol * solMark + lpUsd };
 }
 
 /** Data-driven agent vault keys — treasury excluded. Never hardcoded. */
@@ -626,11 +628,12 @@ function renderOverview(ctx) {
       <div class="row"><span class="dim">BALANCES AS OF</span><span class="num dim">${ctx.balancesAt > 0 ? etClock(ctx.balancesAt) + " ET" : "—"}</span></div>
     </div>`;
 
-  // ── asset mix: platform totals + liquid-vs-vested ──
+  // ── asset mix: platform totals by category (stocks / LP pools / SOL / USDC) ──
   const usdcUsd = tot.usdc;
   const spcxUsd = tot.spcx * ctx.spcxMark;
   const solUsd = tot.sol * (ctx.solMark ?? 0);
-  const mixTotal = usdcUsd + spcxUsd + solUsd || 1;
+  const lpUsd = tot.lpUsd || 0;
+  const mixTotal = usdcUsd + spcxUsd + solUsd + lpUsd || 1;
   const vestUsd = vestingUsd(ctx.vesting, ctx);
   const liqUsd = Math.max(0, aum - vestUsd);
   const w = (v, d) => (v / d * 100).toFixed(2) + "%";
@@ -641,11 +644,13 @@ function renderOverview(ctx) {
       <div class="seg-usdc" style="width:${w(usdcUsd, mixTotal)}"></div>
       <div class="seg-spcx" style="width:${w(spcxUsd, mixTotal)}"></div>
       <div class="seg-sol" style="width:${w(solUsd, mixTotal)}"></div>
+      <div class="seg-lp" style="width:${w(lpUsd, mixTotal)}"></div>
     </div>
     <div class="mix-legend">
       <span><span class="swatch" style="background:var(--green)"></span>USDC <b>${fmtUsd(usdcUsd)}</b></span>
-      <span><span class="swatch" style="background:var(--amber)"></span>SPCX <b>${fmtUsd(spcxUsd)}</b></span>
+      <span><span class="swatch" style="background:var(--amber)"></span>STOCKS <b>${fmtUsd(spcxUsd)}</b></span>
       <span><span class="swatch" style="background:var(--blue)"></span>SOL <b>${fmtUsd(solUsd)}</b></span>
+      <span><span class="swatch" style="background:var(--purple)"></span>LP POOLS <b>${fmtUsd(lpUsd)}</b></span>
     </div>
     <div class="mixbar thin" role="img" aria-label="liquid versus vesting">
       <div class="seg-usdc" style="width:${w(liqUsd, aum || 1)}"></div>
@@ -826,6 +831,10 @@ function renderAgents(ctx) {
             <tr><td class="lbl">VAULT PDA</td><td>${addrCell(meta.vaultPda)}</td></tr>
             <tr><td class="lbl">MULTISIG</td><td>${addrCell(meta.multisigPda)}</td></tr>
           </tbody></table>
+        </div>
+        <div class="agent-sec">
+          <h4>LP POSITIONS · 0</h4>
+          <p class="dim small">No LP positions for this account. The keeper's live MU/USDC position is on the Yield tab.</p>
         </div>
         <div class="agent-sec">
           <h4>VESTING SCHEDULES · ${scheds.length}</h4>
@@ -1100,9 +1109,10 @@ function keeperHtml(k) {
   const benchRows = Object.keys(BENCH_LABELS).map((key) => {
     const v = yNum(bench[key]);
     const d = (v != null && val != null) ? v - val : null;
+    const note = bench[key + "Note"];
     return `<tr>
-      <td>${BENCH_LABELS[key]} <span class="dim small">est.</span></td>
-      <td class="num">${fmtUsd(v)}</td>
+      <td>${BENCH_LABELS[key]} <span class="dim small">est.</span>${note ? `<br><span class="dim small" style="font-size:10px">${esc(note)}</span>` : ""}</td>
+      <td class="num">${v == null ? '<span class="dim">pending</span>' : fmtUsd(v)}</td>
       <td class="num">${d == null ? "—" : yPnl(d)}</td>
     </tr>`;
   }).join("");
@@ -1121,7 +1131,7 @@ function keeperHtml(k) {
     <div class="yield-cols">
       <div class="yield-detail">
         <div class="row"><span class="k">INVENTORY PNL EX-FEES</span><span class="num">${yPnl(inv)}</span></div>
-        <div class="row"><span class="k">TRANSACTION COSTS</span><span class="num">${fmtUsd(txc)}</span></div>
+        <div class="row"><span class="k">TRANSACTION COSTS</span><span class="num">${fmtUsd(txc)}${k.txCostNote ? `<br><span class="dim small" style="font-size:10px">${esc(k.txCostNote)}</span>` : ""}</span></div>
         <div class="row"><span class="k">RECENTERS</span><span class="num">${k.recenters != null ? esc(k.recenters) : "—"}</span></div>
         <div class="row"><span class="k">LAST CHECK</span><span class="num">${k.lastCheckTs ? etFull(Math.floor(Number(k.lastCheckTs) / 1000)) + " ET" : "—"}</span></div>
       </div>
