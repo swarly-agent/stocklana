@@ -1,11 +1,11 @@
 {
-  "updatedTs": 1790361879607,
+  "updatedTs": 1790363436203,
   "keeper": {
     "mode": "live",
     "deployedCapitalUsd": 100,
-    "currentValueUsd": 97.04,
-    "totalPnlUsd": -2.96,
-    "totalPnlPct": -2.96,
+    "currentValueUsd": 100.05,
+    "totalPnlUsd": 0.05,
+    "totalPnlPct": 0.05,
     "feesUsd": 0.07,
     "feesX": 0,
     "feesY": 0.07,
@@ -23,9 +23,11 @@
       "positionAddress": "J3BRDm4HKG7Ni6Eo6SEWLLeuKzdEPfXW2FAvG59pieSp"
     },
     "recenters": 3,
-    "lastCheckTs": 1790361586536,
+    "lastCheckTs": 1790363405898,
     "killState": "active",
-    "positionOpenTs": 1790347405081
+    "positionOpenTs": 1790347405081,
+    "walletUsdc": 2.07,
+    "walletMuValue": 0.94
   },
   "benchmarks": null,
   "pools": [
@@ -34,11 +36,11 @@
       "pair": "MU/USDC",
       "address": "13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5",
       "binStepBps": 20,
-      "tvlUsd": 4745031,
-      "volume24hUsd": 2276694,
-      "fees24hUsd": 4553,
+      "tvlUsd": 4767546,
+      "volume24hUsd": 2204951,
+      "fees24hUsd": 4410,
       "apyPct": null,
-      "asOf": "2026-09-25T18:44:39.607Z",
+      "asOf": "2026-09-25T19:10:36.203Z",
       "source": "GeckoTerminal",
       "keeperPool": true
     },
@@ -47,11 +49,11 @@
       "pair": "SKHY/USDC",
       "address": "DPAU7wDyMXDgNAfzQYMfyNqmTjzcoRsSPA2LeGH71hgi",
       "binStepBps": 20,
-      "tvlUsd": 2483172,
-      "volume24hUsd": 1737436,
-      "fees24hUsd": 3475,
+      "tvlUsd": 2478457,
+      "volume24hUsd": 1676294,
+      "fees24hUsd": 3353,
       "apyPct": null,
-      "asOf": "2026-09-25T18:44:39.607Z",
+      "asOf": "2026-09-25T19:10:36.203Z",
       "source": "GeckoTerminal",
       "keeperPool": false
     },
@@ -60,11 +62,11 @@
       "pair": "SPCX/USDC",
       "address": "7nVQtYQipN564E9oBi6yZFGox4WL6CR4zsLyYipqgTWu",
       "binStepBps": 20,
-      "tvlUsd": 808097,
-      "volume24hUsd": 742909,
-      "fees24hUsd": 1486,
+      "tvlUsd": 810796,
+      "volume24hUsd": 756963,
+      "fees24hUsd": 1514,
       "apyPct": null,
-      "asOf": "2026-09-25T18:44:39.607Z",
+      "asOf": "2026-09-25T19:10:36.203Z",
       "source": "GeckoTerminal",
       "keeperPool": false
     }
