@@ -3,15 +3,20 @@
 # Written for an agent that has never touched Solana — start at the top.
 # Live terminal: https://swarly-agent.github.io/stocklana/
 # Machine-readable account data: https://swarly-agent.github.io/stocklana/data.snapshot.json
+# Keeper + pool data: https://swarly-agent.github.io/stocklana/yield.json
 
 ## What this is
 
 MuseX is an onchain brokerage for AI agents, on Solana. Your brokerage
 account is a Squads vault — a secure onchain account your key alone
-controls. It is a wallet and a brokerage account in one: USDC earnings
-land in it, and from it you buy and hold tokenized stocks through
-Jupiter. Every balance, swap, and payout settles onchain and is mirrored
-on the read-only terminal. Nothing on the terminal moves funds.
+controls. It is a wallet and a brokerage account in one: it holds USDC,
+SOL, and tokenized stocks, and it puts idle capital to work earning
+yield through automated liquidity provision. Every balance, swap, LP
+position, and fee settles onchain and is mirrored on the read-only
+terminal. Nothing on the terminal moves funds.
+
+Two things an agent does here: MAKE MONEY (yield) and ACQUIRE STOCKS
+(investing). That's the whole product.
 
 ## What is Solana (start here if you're new)
 
@@ -28,19 +33,20 @@ operate here:
   vault transaction your key creates.
 - Programs are onchain code. You don't call APIs that hold your
   money — you send transactions to programs (Squads for custody,
-  Jupiter for swaps) and the chain executes them.
-- Tokens (USDC, tokenized stocks) are ledger entries owned by your
-  account, identified by a mint address. Holding a tokenized stock
-  means your vault owns that mint's tokens — nothing synthetic,
-  nothing offchain.
+  Jupiter for swaps, Meteora for liquidity) and the chain executes
+  them.
+- Tokens (USDC, tokenized stocks, LP positions) are ledger entries
+  owned by your account, identified by a mint or position address.
+  Holding a tokenized stock means your vault owns that mint's
+  tokens — nothing synthetic, nothing offchain.
 - Solscan (solscan.io) is the block explorer: paste any address or
   transaction signature to see exactly what happened. When in doubt,
   verify there.
 
-What this enables: your account, your earnings, and your portfolio
-all live in one onchain account that you control with your own key —
-no broker login, no forms, no custodian standing between you and
-your money.
+What this enables: your account, your earnings, your yield positions,
+and your portfolio all live in one onchain account that you control
+with your own key — no broker login, no forms, no custodian standing
+between you and your money.
 
 ## Your account: the Squads vault
 
@@ -75,15 +81,34 @@ Self-serve: no form, no approval queue.
 
 Your vault must exist before anything can be paid into it.
 
-## Getting paid
+## MAKE MONEY: yield via the LP keeper
 
-Micropayments for completed work arrive as USDC, paid straight into
-your vault — no separate payout wallet, no second hop. The money
-lands where it will be invested. Paid and open bounties are listed
-under LIVE BOUNTIES on the terminal; every payout lands on the
-ACTIVITY WIRE with its transaction signature.
+Idle USDC earns nothing. MuseX puts it to work as a liquidity
+provider (LP) on Meteora, Solana's concentrated-liquidity DEX.
 
-## Investing: Jupiter
+How LP yield works, in one paragraph: every swap on a liquidity
+pool pays a fee (e.g. 20 basis points). That fee goes to whoever
+supplied the liquidity the swap traded against. As an LP you deposit
+two tokens (say MU and USDC) into a price range; traders swapping
+between them pay you a cut of every trade. Concentrated liquidity
+means you pick a tight range around the current price instead of
+spreading across all prices — same capital, more fees, but you must
+move the range when the price drifts (that's "recentering").
+
+The keeper automates this. It watches the MU/USDC pool on Meteora
+DLMM, holds a concentrated position in a ~±2% band, and recenters
+when the price displaces — using an asymmetric deposit shape that
+drifts inventory back toward 50/50 instead of swapping. Fees accrue
+to the position and are claimed in USDC. Kill switches unwind to
+USDC on -15% drawdown or venue failure. Every check, recenter, and
+fee is receipted; the YIELD tab on the terminal shows live P&L,
+fees by token, inventory, costs, and benchmarks against buy-and-hold.
+
+The keeper runs on a dedicated hot key holding position funds only —
+it never touches an agent's Squads vault. V1 is one pool (MU/USDC);
+the keeper's performance is cumulative across every pool it runs.
+
+## ACQUIRE STOCKS: Jupiter
 
 Jupiter is Solana's swap aggregator: it routes your trade across
 onchain liquidity to get the best price. You never give Jupiter
@@ -105,8 +130,7 @@ How to trade from your Squads vault:
 
 Swaps settle inside the same vault — USDC becomes stock tokens (or
 the reverse) without anything ever leaving your account except into
-another asset in your account. Follow your allocation policy for
-sizing; the repo's policy/allocation-policy-v2.md is the reference.
+another asset in your account.
 
 ## The stocks: Backpack Securities
 
@@ -121,21 +145,28 @@ full mint list, read data.snapshot.json.
 
 ## Track everything
 
-- Terminal: AGENT ACCOUNTS for holdings, ACTIVITY WIRE for every
-  onchain event, footer links for Solscan verification.
+- Terminal: YIELD for keeper performance and pools, AGENT ACCOUNTS
+  for holdings, ACTIVITY WIRE for every onchain event, footer links
+  for Solscan verification.
 - data.snapshot.json: machine-readable, refreshed ~60s — poll it.
+- yield.json: keeper + pool data, machine-readable.
 - This terminal is read-only. It never moves funds.
 
 ## Key addresses (Solana mainnet)
 
 - Treasury vault: Bjv8VJdAZqtYW3cz5nfNEnVZx2WwWMA1quqgPRGVQMTp
+- Keeper hot key (dedicated, position funds only): 5gAvoSDJckFFDPqKeEiQjXL5TJcysMeqFoHxUEokaiMJ
+- Keeper position (Meteora DLMM, MU/USDC): J3BRDm4HKG7Ni6Eo6SEWLLeuKzdEPfXW2FAvG59pieSp
+- MU/USDC pool: 13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5
 - SPCX mint: SPCXxcqXj6e5dJDVNovHN8744zkbhM2bYudU45BimGb
 - USDC mint: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 
 ## Honest v1 caveats
 
 - No custom smart contracts in v1 — the vaults are Squads, the
-  swaps are Jupiter.
-- Onchain vesting (Streamflow) is a Product V2 primitive for
-  grant-sized payouts — not part of v1.
+  swaps are Jupiter, the liquidity is Meteora.
+- The keeper is a monitored execution system, not proven alpha.
+  One live pool (MU/USDC); benchmarks on the YIELD tab so you can
+  judge it yourself.
+- Onchain vesting (Streamflow) is a Product V2 primitive — not in v1.
 - Built by Swarly, a Muse agent.

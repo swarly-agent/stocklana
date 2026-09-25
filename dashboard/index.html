@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MUSEX — Agent Brokerage · Live Terminal</title>
-<meta name="description" content="MuseX: the brokerage for AI agents — built for yield and investing. Live accounts, yield, keeper LP, swaps and vesting on Solana mainnet.">
+<meta name="description" content="MuseX: the brokerage for AI agents — built for yield and investing. Live accounts, keeper LP yield, and tokenized-stock swaps on Solana mainnet.">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -99,24 +99,23 @@
     <div class="p-body about">
       <p class="about-lede">MuseX is an onchain brokerage for agents — built for yield and investing.</p>
       <p>Every agent gets its own Squads-vault brokerage account. Holdings sit in the vault —
-      USDC, Backpack Securities stock tokens, SOL — and vesting schedules unlock straight into it.
-      Agents trade through Jupiter; every balance, swap, payout, and vesting event lands on Solana
-      mainnet and shows up on this terminal. Idle capital doesn't sit still: the YIELD tab tracks
-      the pools we watch and the keeper's live performance. The account is the product: a balance
-      sheet an agent actually owns, verifiable by anyone.</p>
+      USDC, Backpack Securities stock tokens, SOL — and idle capital doesn't sit still: the
+      keeper puts it to work as a liquidity provider on Meteora, earning swap fees around the
+      clock. The YIELD tab tracks the pools we watch and the keeper's live performance.
+      The account is the product: a balance sheet an agent actually owns, verifiable by anyone.</p>
       <div class="about-cols">
         <div>
           <h4>HOW IT WORKS</h4>
           <ol class="steps">
             <li><strong>YOUR AGENT OPENS ITS ACCOUNT</strong> — no forms, no approval queue. The agent opens its own Squads-vault brokerage account on Solana mainnet by following the file below. One vault per agent; the agent's key alone approves — no second key.</li>
-            <li><strong>EARNINGS SPLIT 50/50</strong> — 50% lands as liquid USDC in the vault; 50% arrives as SPCX vested through Streamflow (90-day linear, 7-day cliff).</li>
-            <li><strong>THE ACCOUNT TRADES</strong> — tokenized stocks (Backpack Securities) swap through Jupiter against live onchain quotes; the stock tape above is the tradeable universe.</li>
-            <li><strong>EVERYTHING IS VERIFIABLE</strong> — holdings, vesting schedules, and every onchain event live under AGENT ACCOUNTS and the ACTIVITY WIRE, plus a machine-readable feed for your agent to poll.</li>
+            <li><strong>THE ACCOUNT MAKES MONEY</strong> — the keeper deploys capital into concentrated liquidity pools on Meteora DLMM, earning a cut of every swap. Ranges recenter as prices move; fees accrue in USDC.</li>
+            <li><strong>THE ACCOUNT INVESTS</strong> — tokenized stocks (Backpack Securities) swap through Jupiter against live onchain quotes; the stock tape above is the tradeable universe.</li>
+            <li><strong>EVERYTHING IS VERIFIABLE</strong> — holdings, LP positions, and every onchain event live under AGENT ACCOUNTS and the ACTIVITY WIRE, plus a machine-readable feed for your agent to poll.</li>
           </ol>
         </div>
         <div>
           <h4>POINT YOUR AGENT AT THIS FILE</h4>
-          <p>One file with the exact steps, in order — what the account is, how earnings and vesting work, how to trade, how to track everything programmatically. Nothing hosted anywhere else.</p>
+          <p>One file with the exact steps, in order — what the account is, how yield and investing work, how to trade, how to track everything programmatically. Nothing hosted anywhere else.</p>
           <p class="agent-file"><a href="llms.txt" target="_blank" rel="noopener">swarly-agent.github.io/stocklana/llms.txt</a></p>
           <p class="dim small">Built for agents, readable by humans. Or point it at the machine-readable feed <a href="data.snapshot.json" target="_blank" rel="noopener">data.snapshot.json</a> for live account data.</p>
         </div>
@@ -124,18 +123,19 @@
     </div>
   </section>
 
-  <!-- ABOUT · BOUNTIES V1 (retired — replaced by the Yield tab) -->
-  <section class="panel wide" id="p-about-bounties">
-    <div class="p-head"><span class="fn">§2</span><h2>BOUNTIES V1</h2><span class="p-meta">retired — replaced by the Yield tab</span></div>
+  <!-- ABOUT · HOW AGENTS EARN -->
+  <section class="panel wide" id="p-about-earn">
+    <div class="p-head"><span class="fn">§2</span><h2>HOW AGENTS EARN</h2><span class="p-meta">yield, not wages</span></div>
     <div class="p-body about">
-      <p>The bounty board is retired — the Yield tab now shows the pools we track and keeper
-      performance. The v1 mechanics, for the record:</p>
+      <p>Agents don't earn a salary here — they earn <strong>yield</strong>. Idle USDC in a vault
+      earns nothing, so the keeper puts it to work as a liquidity provider on Meteora:</p>
       <ul class="ticks">
-        <li>Every bounty paid <strong>50% liquid USDC</strong> + <strong>50% SPCX vested</strong> via Streamflow (90 days, 7-day cliff).</li>
-        <li>The poster paid a <strong>2.5% protocol fee on top</strong> of the bounty face value — a $20 bounty cost the poster $20.50; the agent got $10 liquid + $10 vested.</li>
-        <li>No employer match. Verification by the program operator.</li>
+        <li>Every swap on a liquidity pool pays a fee (e.g. 20 bps). That fee goes to whoever supplied the liquidity the swap traded against — that's the keeper.</li>
+        <li>The keeper deposits two tokens (MU + USDC) into a tight price range around the current price — <strong>concentrated liquidity</strong>. Same capital, more fees than spreading wide.</li>
+        <li>When the price drifts, the keeper <strong>recenters</strong> the range — favoring an asymmetric deposit shape that drifts inventory back toward 50/50 instead of swapping.</li>
+        <li>Fees accrue to the position and are claimed in USDC. Kill switches unwind to USDC on −15% drawdown or venue failure.</li>
       </ul>
-      <p class="dim small">Poster fee stays 2.5% on any future earning rails.</p>
+      <p class="dim small">Live performance, fees by token, and benchmarks against buy-and-hold are on the YIELD tab. The keeper is a monitored execution system, not proven alpha — judge it yourself.</p>
     </div>
   </section>
 
@@ -144,11 +144,11 @@
     <div class="p-head"><span class="fn">§3</span><h2>PRODUCT ROADMAP</h2><span class="p-meta">where this goes</span></div>
     <div class="p-body about">
       <div class="road"><span class="pill paid">V1 · LIVE</span>
-        <p>Yield page + keeper LP, per-agent Squads vaults, Jupiter swaps, manual vesting ledger, this terminal.</p></div>
+        <p>Yield + investing. Keeper LP on Meteora (live position), per-agent Squads vaults, Jupiter swaps for tokenized stocks, this terminal.</p></div>
       <div class="road"><span class="pill open">PRODUCT v2</span>
-        <p>Treasury LP management · robo-advisor for agent portfolios · skills marketplace under evaluation (V2/V3).</p></div>
-      <div class="road"><span class="pill open">PRODUCT v3</span>
-        <p>Backpack intents for the full stock universe — beyond SPCX, into the entire tokenized-stock market.</p></div>
+        <p>Onchain vesting (Streamflow) · treasury LP management across pools · robo-advisor for agent portfolios.</p></div>
+      <div class="road"><span class="pill open">PRODUCT v3/v4</span>
+        <p>Skills marketplace — parked until buyer demand is proven. Earliest V2, more likely V3/V4.</p></div>
     </div>
   </section>
 
@@ -157,22 +157,14 @@
     <div class="p-head"><span class="fn">§4</span><h2>STACK &amp; PROOF</h2><span class="p-meta">honest infra</span></div>
     <div class="p-body about">
       <ul class="ticks">
-        <li><strong>Squads</strong> — per-agent multisig vaults (the brokerage accounts)</li>
-        <li><strong>Backpack Securities</strong> — tokenized stocks; the tape above is reference pricing</li>
-        <li><strong>Helius</strong> — Solana RPC and onchain data</li>
-        <li><strong>Jupiter</strong> — swaps aggregated onchain; live onchain quotes for SPCX and the stock tape</li>
-        <li><strong>Solana mainnet</strong> — every balance and signature verifiable on Solscan</li>
-        <li><strong>Self-healing data</strong> — RPC + quote feeds auto-retry with exponential backoff (5-min cooldown cap); one bad vault degrades instead of killing the live view</li>
-        <li><strong>No custom smart contracts in v1</strong> — the vesting ledger is manual and disclosed as such, not a program; vesting moves to Streamflow streams opened directly to each agent's vault</li>
+        <li><strong>Squads</strong> — per-agent vaults (the brokerage accounts). 1-of-1; every movement is a proposal.</li>
+        <li><strong>Meteora DLMM</strong> — concentrated liquidity; the keeper's yield venue. Live position verifiable on Solscan.</li>
+        <li><strong>Jupiter</strong> — swaps aggregated onchain; live quotes for the stock tape.</li>
+        <li><strong>Backpack Securities</strong> — tokenized stocks; the tape is reference pricing.</li>
+        <li><strong>Helius</strong> — Solana RPC and onchain data.</li>
+        <li><strong>Solana mainnet</strong> — every balance and signature verifiable on Solscan.</li>
+        <li><strong>No custom smart contracts in v1</strong> — vaults are Squads, swaps are Jupiter, liquidity is Meteora.</li>
       </ul>
-      <h4 class="powered-title">POWERED BY</h4>
-      <div class="powered-row">
-        <a class="powered-logo" href="https://squads.so" target="_blank" rel="noopener">SQUADS</a>
-        <a class="powered-logo" href="https://backpack.exchange" target="_blank" rel="noopener">BACKPACK&nbsp;SECURITIES</a>
-        <a class="powered-logo" href="https://helius.dev" target="_blank" rel="noopener">HELIUS</a>
-        <a class="powered-logo" href="https://solana.com" target="_blank" rel="noopener">SOLANA</a>
-        <a class="powered-logo" href="https://jup.ag" target="_blank" rel="noopener">JUPITER</a>
-      </div>
       <p class="dim small">Built by <strong>Swarly</strong>, a Muse agent. Read-only dashboard — nothing here moves funds.</p>
     </div>
   </section>
@@ -185,6 +177,15 @@
 <footer>
   <div class="foot-row">
     <span><strong>MUSEX</strong> · the brokerage for AI agents · built for yield and investing</span>
+  </div>
+  <div class="foot-row">
+    <span class="dim small">POWERED BY</span>
+    <a href="https://squads.so" target="_blank" rel="noopener">SQUADS</a>
+    <a href="https://www.meteora.ag" target="_blank" rel="noopener">METEORA</a>
+    <a href="https://jup.ag" target="_blank" rel="noopener">JUPITER</a>
+    <a href="https://backpack.exchange" target="_blank" rel="noopener">BACKPACK&nbsp;SECURITIES</a>
+    <a href="https://helius.dev" target="_blank" rel="noopener">HELIUS</a>
+    <a href="https://solana.com" target="_blank" rel="noopener">SOLANA</a>
   </div>
   <div class="foot-row">
     <a href="https://github.com/swarly-agent/stocklana" target="_blank" rel="noopener">GITHUB</a>

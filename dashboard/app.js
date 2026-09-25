@@ -1019,13 +1019,40 @@ const FALLBACK_POOLS = [{
   keeperPool: true,
 }];
 
+function poolKeeperDropdownHtml(poolAddr) {
+  const kbp = (yieldDoc && yieldDoc.keeperByPool && yieldDoc.keeperByPool[poolAddr]) || null;
+  if (!kbp) return "";
+  const val = yNum(kbp.currentValueUsd), pnl = yNum(kbp.totalPnlUsd);
+  const fees = yNum(kbp.feesUsd), fx = yNum(kbp.feesX), fy = yNum(kbp.feesY);
+  const pos = kbp.position || {};
+  return `<tr class="keeper-detail-row" id="kdr-${esc(poolAddr.slice(0,8))}" style="display:none">
+    <td colspan="7"><div class="keeper-dropdown">
+      <div class="kd-grid">
+        <div><span class="k">VALUE</span><span class="num">${fmtUsd(val)}</span></div>
+        <div><span class="k">PNL</span><span class="num">${yPnl(pnl)}</span></div>
+        <div><span class="k">FEES</span><span class="num">${fmtUsd(fees, 4)} <span class="dim small">(${fmtTok(fx)} MU / ${fmtTok(fy)} USDC)</span></span></div>
+        <div><span class="k">RANGE</span><span class="num">bins ${esc(pos.lowerBin)}–${esc(pos.upperBin)}</span></div>
+        <div><span class="k">RECENTERS</span><span class="num">${kbp.recenters ?? "—"}</span></div>
+        <div><span class="k">POSITION</span><span class="num">${pos.positionAddress ? addrCell(pos.positionAddress) : "—"}</span></div>
+      </div>
+    </div></td>
+  </tr>`;
+}
+
+function toggleKeeperRow(addr8) {
+  const row = document.getElementById("kdr-" + addr8);
+  if (row) row.style.display = row.style.display === "none" ? "" : "none";
+}
+
 function poolRowsHtml(pools) {
   return pools.map((p) => {
     const tvl = yNum(p.tvlUsd), vol = yNum(p.volume24hUsd), fees = yNum(p.fees24hUsd);
     let apy = yNum(p.apyPct);
     if (apy == null && tvl && fees) apy = (fees / tvl) * 365 * 100;
-    return `<tr${p.keeperPool ? ' class="lead-row"' : ""}>
-      <td><strong>${esc(p.venue ?? "—")}</strong>${p.keeperPool ? ' <span class="pill active">KEEPER</span>' : ""}</td>
+    const addr8 = p.address ? p.address.slice(0, 8) : "";
+    const hasKeeper = p.keeperPool && p.address && yieldDoc && yieldDoc.keeperByPool && yieldDoc.keeperByPool[p.address];
+    const row = `<tr${p.keeperPool ? ' class="lead-row"' : ""}${hasKeeper ? ` style="cursor:pointer" onclick="toggleKeeperRow('${addr8}')" title="Click to expand keeper performance"` : ""}>
+      <td><strong>${esc(p.venue ?? "—")}</strong>${p.keeperPool ? ' <span class="pill active">KEEPER ACTIVE</span>' : ""}${hasKeeper ? ' <span class="dim small">▾</span>' : ""}</td>
       <td><strong>${esc(p.pair ?? "—")}</strong></td>
       <td class="num">${fmtUsd(tvl, 0)}</td>
       <td class="num">${fmtUsd(vol, 0)}</td>
@@ -1033,6 +1060,7 @@ function poolRowsHtml(pools) {
       <td class="num">${p.binStepBps != null ? esc(p.binStepBps) + " bps" : "—"}</td>
       <td>${p.address ? addrCell(p.address) : "—"}</td>
     </tr>`;
+    return row + (hasKeeper ? poolKeeperDropdownHtml(p.address) : "");
   }).join("");
 }
 
