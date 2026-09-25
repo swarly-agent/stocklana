@@ -311,10 +311,15 @@ function vestedFraction(sched, now) {
 }
 
 /** USD value of a vault: USDC + SPCX×mark + SOL×mark. SOL counts toward AUM. */
-function vaultUsd(vault, ctx) {
-  return tokenBalance(vault, USDC_MINT)
+function vaultUsd(vault, ctx, key) {
+  const base = tokenBalance(vault, USDC_MINT)
     + tokenBalance(vault, SPCX_MINT) * ctx.spcxMark
     + (vault.sol ?? 0) * (ctx.solMark ?? 0);
+  // Keeper LP position belongs to the treasury
+  if (key === "treasury" && typeof yieldDoc !== "undefined" && yieldDoc && yieldDoc.keeper) {
+    return base + (yNum(yieldDoc.keeper.currentValueUsd) || 0);
+  }
+  return base;
 }
 /* ───────────────────────── data boot ───────────────────────── */
 
@@ -526,7 +531,7 @@ function renderTapes(ctx) {
   const solUsd = tot.sol * (solMark ?? 0);
   const aumItems = [
     `<span class="k">TOTAL AUM</span> <span class="up"><b>${fmtUsd(tot.usd)}</b></span>`,
-    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, ctx))}</span>`,
+    `<span class="k">TREASURY</span> <span class="up">${fmtUsd(vaultUsd(ctx.vaults.treasury ?? {}, ctx, "treasury"))}</span>`,
     `<span class="k">USDC</span> ${fmtTok(tot.usdc, 2)} <span class="k">·</span> <span class="up">${fmtUsd(tot.usdc)}</span>`,
     `<span class="k">SPCX</span> ${fmtTok(tot.spcx)} <span class="k">@</span> ${fmtUsd(mark)} <span class="k">${markSrc}</span> <span class="k">·</span> <span class="up">${fmtUsd(spcxUsd)}</span>`,
     `<span class="k">SOL</span> ${fmtTok(tot.sol, 4)} <span class="k">@</span> ${solMark ? fmtUsd(solMark) : "—"} <span class="k">${solSrc}</span> <span class="k">·</span> <span class="up">${fmtUsd(solUsd)}</span>`,
@@ -610,9 +615,9 @@ function renderOverview(ctx) {
 
   // ── total assets: TOTAL AUM → TREASURY → AGENT ACCOUNTS (top 5 + "N more") ──
   const agentRows = agentKeys(ctx)
-    .map((k) => ({ key: k, usd: vaultUsd(ctx.vaults[k] ?? {}, ctx) }))
+    .map((k) => ({ key: k, usd: vaultUsd(ctx.vaults[k] ?? {}, ctx, k) }))
     .sort((a, b) => b.usd - a.usd);
-  const tUsd = vaultUsd(t, ctx);
+  const tUsd = vaultUsd(t, ctx, "treasury");
   const topAgents = agentRows.slice(0, 5);
   const moreN = agentRows.length - topAgents.length;
   const pct = (v) => (aum ? (v / aum * 100).toFixed(1) + "%" : "—");
@@ -767,7 +772,7 @@ function renderAgents(ctx) {
   let list = agentKeys(ctx).map((key) => {
     const meta = agentByKey(ctx, key);
     const v = ctx.vaults[key] ?? {};
-    const acctUsd = vaultUsd(v, ctx);
+    const acctUsd = vaultUsd(v, ctx, key);
     const vestUsd = vestingUsd((ctx.vesting ?? []).filter((s) => s.agent === meta.id), ctx);
     return { key, meta, v, acctUsd, vestUsd, liqUsd: Math.max(0, acctUsd - vestUsd) };
   });
@@ -834,7 +839,7 @@ function renderAgents(ctx) {
         </div>
         <div class="agent-sec">
           <h4>LP POSITIONS · 0</h4>
-          <p class="dim small">No LP positions for this account. The keeper's live MU/USDC position is on the Yield tab.</p>
+          <p class="dim small">No LP positions for this account. The keeper's live MU/USDC position belongs to the treasury — see the Yield tab.</p>
         </div>
         <div class="agent-sec">
           <h4>VESTING SCHEDULES · ${scheds.length}</h4>
