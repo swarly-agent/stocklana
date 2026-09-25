@@ -300,16 +300,6 @@ function tokenBalance(vault, mint) {
   return t ? t.uiAmount ?? Number(t.amount) / Math.pow(10, t.decimals || 6) : 0;
 }
 
-/** Vested fraction of a schedule at unix time `now` (0 before cliff, linear to 1). */
-function vestedFraction(sched, now) {
-  const start = Number(sched.startTs);
-  const cliff = start + Number(sched.cliffDays) * 86400;
-  const end = start + Number(sched.durationDays) * 86400;
-  if (now < cliff) return 0;
-  if (now >= end) return 1;
-  return (now - start) / (end - start);
-}
-
 /** USD value of a vault: USDC + SPCX×mark + SOL×mark. SOL counts toward AUM. */
 function vaultUsd(vault, ctx, key) {
   const base = tokenBalance(vault, USDC_MINT)
@@ -388,18 +378,6 @@ function txLabelFor(sig, ctx) {
   const e = (ctx.txRegistry ?? {})[sig];
   if (e) return { label: e.label ?? "ONCHAIN TRANSACTION", type: e.type ?? "" };
   return { label: "ONCHAIN TRANSACTION", type: "" };
-}
-
-/** Unvested SPCX across the given active schedules, in USD at the SPCX mark. */
-function vestingUsd(schedules, ctx) {
-  const now = ctx.ts;
-  let spcx = 0;
-  for (const s of schedules ?? []) {
-    if (String(s.status).toLowerCase() !== "active") continue;
-    const total = Number(s.principalAmount) + Number(s.matchAmount);
-    spcx += total * (1 - vestedFraction(s, now));
-  }
-  return spcx * ctx.spcxMark;
 }
 
 /** Swap volume per ET day over the trailing 7 days, from the tx registry. */
@@ -558,6 +536,12 @@ function renderTapes(ctx) {
   }).join("");
   const stockHalf = statusItem + qItems;
   $("tape-stocks").innerHTML = stockHalf + stockHalf;
+  // Match scroll speed (px/sec) to the AUM tape: scale duration by content width
+  requestAnimationFrame(() => {
+    const aumW = $("tape-aum").scrollWidth / 2 || 1;
+    const stkW = $("tape-stocks").scrollWidth / 2 || 1;
+    $("tape-stocks").style.animationDuration = `${60 * (stkW / aumW)}s`;
+  });
 }
 
 /* ── footer: vault links rendered from the snapshot, never hardcoded ── */
@@ -618,6 +602,10 @@ function renderOverview(ctx) {
     .map((k) => ({ key: k, usd: vaultUsd(ctx.vaults[k] ?? {}, ctx, k) }))
     .sort((a, b) => b.usd - a.usd);
   const tUsd = vaultUsd(t, ctx, "treasury");
+  const keeperUsd = (typeof yieldDoc !== "undefined" && yieldDoc && yieldDoc.keeper)
+    ? (yNum(yieldDoc.keeper.currentValueUsd) || 0) : 0;
+  const keeperFees = (typeof yieldDoc !== "undefined" && yieldDoc && yieldDoc.keeper)
+    ? (yNum(yieldDoc.keeper.feesUsd) || 0) : 0;
   const topAgents = agentRows.slice(0, 5);
   const moreN = agentRows.length - topAgents.length;
   const pct = (v) => (aum ? (v / aum * 100).toFixed(1) + "%" : "—");
@@ -626,6 +614,8 @@ function renderOverview(ctx) {
     <div class="ov-v">${fmtUsd(aum)}</div>
     <div class="ov-sub">
       <div class="row"><span>TREASURY</span><span class="num">${fmtUsd(tUsd)} <span class="dim">${pct(tUsd)}</span></span></div>
+      <div class="row sub"><span class="dim">↳ KEEPER LP</span><span class="num dim">${fmtUsd(keeperUsd)}</span></div>
+      <div class="row sub"><span class="dim">↳ KEEPER FEES</span><span class="num dim">${fmtUsd(keeperFees)}</span></div>
       <div class="row"><span class="dim">AGENT ACCOUNTS</span><span class="num dim">${agentRows.length}</span></div>
       ${topAgents.map((a) => `
       <div class="row"><span>${esc(agentShortLabel(ctx, a.key))}</span><span class="num">${fmtUsd(a.usd)} <span class="dim">${pct(a.usd)}</span></span></div>`).join("")}
@@ -639,8 +629,6 @@ function renderOverview(ctx) {
   const solUsd = tot.sol * (ctx.solMark ?? 0);
   const lpUsd = tot.lpUsd || 0;
   const mixTotal = usdcUsd + spcxUsd + solUsd + lpUsd || 1;
-  const vestUsd = vestingUsd(ctx.vesting, ctx);
-  const liqUsd = Math.max(0, aum - vestUsd);
   const w = (v, d) => (v / d * 100).toFixed(2) + "%";
   $("ov-mix").innerHTML = `
     <span class="ov-k">ASSET MIX · USD</span>
@@ -656,14 +644,6 @@ function renderOverview(ctx) {
       <span><span class="swatch" style="background:var(--amber)"></span>STOCKS <b>${fmtUsd(spcxUsd)}</b></span>
       <span><span class="swatch" style="background:var(--blue)"></span>SOL <b>${fmtUsd(solUsd)}</b></span>
       <span><span class="swatch" style="background:var(--purple)"></span>LP POOLS <b>${fmtUsd(lpUsd)}</b></span>
-    </div>
-    <div class="mixbar thin" role="img" aria-label="liquid versus vesting">
-      <div class="seg-usdc" style="width:${w(liqUsd, aum || 1)}"></div>
-      <div class="seg-vest" style="width:${w(vestUsd, aum || 1)}"></div>
-    </div>
-    <div class="mix-legend">
-      <span><span class="swatch" style="background:var(--green)"></span>LIQUID <b>${fmtUsd(liqUsd)}</b></span>
-      <span><span class="swatch" style="background:var(--purple)"></span>VESTING <b>${fmtUsd(vestUsd)}</b></span>
     </div>`;
 
   // ── activity: txn headline + 7d swap volume bars + AUM history ──
@@ -718,49 +698,6 @@ function renderOverview(ctx) {
 
 /* ── F2 · agent accounts: data-driven, top 100, paginated, searchable ── */
 
-function schedStatus(s, now) {
-  const start = Number(s.startTs);
-  const cliffTs = start + Number(s.cliffDays) * 86400;
-  if (now < cliffTs) return { txt: "IN CLIFF", color: "var(--red)", sub: `first release in ${((cliffTs - now) / 86400).toFixed(1)}d` };
-  const frac = vestedFraction(s, now);
-  if (frac >= 1) return { txt: "FULLY VESTED", color: "var(--green)", sub: "complete" };
-  const day = Math.floor((now - start) / 86400);
-  return { txt: `VESTING · DAY ${day}/${s.durationDays}`, color: "var(--blue)", sub: `${fmtPct(frac)} vested` };
-}
-
-function schedHtml(s, ctx) {
-  const now = ctx.ts;
-  const start = Number(s.startTs);
-  const end = start + Number(s.durationDays) * 86400;
-  const frac = vestedFraction(s, now);
-  const total = Number(s.principalAmount) + Number(s.matchAmount);
-  const vested = total * frac;
-  const elapsedPct = Math.min(100, Math.max(0, (now - start) / (end - start) * 100));
-  const cliffPct = (Number(s.cliffDays) / Number(s.durationDays) * 100).toFixed(2);
-  const st = schedStatus(s, now);
-  return `<div class="vest-sched">
-    <div class="vest-top">
-      <span class="vest-id">${esc(s.id)}</span>
-      <span class="muted">${s.durationDays}d linear · ${s.cliffDays}d cliff</span>
-    </div>
-    <div class="timeline">
-      <div class="elapsed" style="width:${elapsedPct.toFixed(2)}%"></div>
-      <div class="vested" style="width:${(frac * 100).toFixed(2)}%"></div>
-      <div class="cliff" style="left:${cliffPct}%"></div>
-      <div class="now" style="left:${elapsedPct.toFixed(2)}%"></div>
-      <div class="end-cap"></div>
-    </div>
-    <div class="ticks"><span>DAY 0 · ${et(start)}</span><span>CLIFF · DAY ${s.cliffDays}</span><span>DAY ${s.durationDays} · ${et(end)}</span></div>
-    <div class="vest-meta">
-      <strong style="color:${st.color}">${st.txt}</strong> · ${esc(st.sub)}<br>
-      vested <strong style="color:var(--text)">${fmtTok(vested)} / ${fmtTok(total)} SPCX</strong><br>
-      vesting total ${fmtTok(total)} SPCX · ${fmtUsd(total * ctx.spcxMark)} at mark<br>
-      fund ${txLink(s.fundingTx)}<br>
-      <span class="dim">enforcement: ${esc(s.enforcement ?? "ledger-manual — disclosed, not a program")}</span>
-    </div>
-  </div>`;
-}
-
 const AGENTS_PAGE_SIZE = 10;
 let agentsPage = 0;
 let agentsQuery = "";
@@ -773,8 +710,7 @@ function renderAgents(ctx) {
     const meta = agentByKey(ctx, key);
     const v = ctx.vaults[key] ?? {};
     const acctUsd = vaultUsd(v, ctx, key);
-    const vestUsd = vestingUsd((ctx.vesting ?? []).filter((s) => s.agent === meta.id), ctx);
-    return { key, meta, v, acctUsd, vestUsd, liqUsd: Math.max(0, acctUsd - vestUsd) };
+    return { key, meta, v, acctUsd };
   });
   list.sort((a, b) => b.acctUsd - a.acctUsd);
   list = list.slice(0, 100); // top 100
@@ -801,11 +737,7 @@ function renderAgents(ctx) {
   const cards = page.map((a) => {
     const { key, meta, v } = a;
     const usdc = tokenBalance(v, USDC_MINT);
-    const scheds = (ctx.vesting ?? []).filter((s) => s.agent === meta.id);
     const isOpen = openCards.has(key);
-    const vestHtml = scheds.length
-      ? scheds.map((s) => schedHtml(s, ctx)).join("")
-      : `<p class="empty-note">no vesting schedules.</p>`;
     const swapHtml = (v.recentSigs ?? []).length
       ? (v.recentSigs ?? []).slice(0, 8).map((s) => {
           const info = txLabelFor(s.signature, ctx);
@@ -827,7 +759,6 @@ function renderAgents(ctx) {
       <div class="agent-summary">
         <div class="sum-cell"><span class="k">ACCOUNT VALUE</span><span class="v">${fmtUsd(a.acctUsd)}</span></div>
         <div class="sum-cell"><span class="k">USDC</span><span class="v" style="color:var(--green)">${fmtTok(usdc, 2)}</span></div>
-        <div class="sum-cell"><span class="k">LIQUID</span><span class="v">${fmtUsd(a.liqUsd)}</span></div>
       </div>
       <div class="agent-detail">
         <div class="agent-sec">
@@ -840,10 +771,6 @@ function renderAgents(ctx) {
         <div class="agent-sec">
           <h4>LP POSITIONS · 0</h4>
           <p class="dim small">No LP positions for this account. The keeper's live MU/USDC position belongs to the treasury — see the Yield tab.</p>
-        </div>
-        <div class="agent-sec">
-          <h4>VESTING SCHEDULES · ${scheds.length}</h4>
-          ${vestHtml}
         </div>
         <div class="agent-sec">
           <h4>ONCHAIN HISTORY</h4>
@@ -884,15 +811,15 @@ function renderAgents(ctx) {
 
 /* ── F3 · activity wire: registry-driven, opens with the full-economics test ── */
 
-const FEED_ICONS = { swap: "⇄", payout: "$", vesting: "◐" };
+const FEED_ICONS = { swap: "⇄", transfer: "→", lp: "◈" };
 
 /* ── wire filters + grouping state ── */
 
 const FEED_FILTERS = [
-  { id: "all",     label: "ALL" },
-  { id: "swaps",   label: "SWAPS",   types: ["swap"] },
-  { id: "payouts", label: "PAYOUTS", types: ["payout"] },
-  { id: "vesting", label: "VESTING", types: ["vesting"] },
+  { id: "all",      label: "ALL" },
+  { id: "swaps",    label: "SWAPS",    types: ["swap"] },
+  { id: "lp",       label: "LP",       types: ["lp"] },
+  { id: "transfers", label: "TRANSFERS", types: ["transfer"] },
 ];
 let feedFilter = "all";
 let feedCtx = null;
@@ -1016,22 +943,49 @@ const yPnl = (n) => {
   return `<span class="${cls}">${v > 0 ? "+" : ""}${fmtUsd(v)}</span>`;
 };
 
-// Fallback pool row — figures checked 2026-09-25 ~09:00 ET via GeckoTerminal
-// (reserve $4.80M / 24h vol $2.72M) plus the keeper's SDK pool read
-// (TVL $4.79M / 24h fees $5,772). Superseded by yield.json when present.
-const FALLBACK_POOLS = [{
-  venue: "Meteora DLMM",
-  pair: "MU/USDC",
-  address: "13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5",
-  binStepBps: 20,
-  tvlUsd: 4800894,
-  volume24hUsd: 2715795,
-  fees24hUsd: 5772,
-  apyPct: null, // derived below from fees24h/tvl
-  asOf: "2026-09-25 09:00 ET",
-  source: "GeckoTerminal + keeper pool read",
-  keeperPool: true,
-}];
+// Fallback pool rows — figures checked 2026-09-25 ~14:45 ET via GeckoTerminal.
+// Superseded by yield.json when present.
+const FALLBACK_POOLS = [
+  {
+    venue: "Meteora DLMM",
+    pair: "MU/USDC",
+    address: "13MEx6gjRadJNUdmToaGSzgeWHLH7FzScUQS9Mc5nYF5",
+    binStepBps: 20,
+    tvlUsd: 4745031,
+    volume24hUsd: 2276694,
+    fees24hUsd: 4553,
+    apyPct: null,
+    asOf: "2026-09-25 14:45 ET",
+    source: "GeckoTerminal",
+    keeperPool: true,
+  },
+  {
+    venue: "Meteora DLMM",
+    pair: "SKHY/USDC",
+    address: "DPAU7wDyMXDgNAfzQYMfyNqmTjzcoRsSPA2LeGH71hgi",
+    binStepBps: 20,
+    tvlUsd: 2483172,
+    volume24hUsd: 1737436,
+    fees24hUsd: 3475,
+    apyPct: null,
+    asOf: "2026-09-25 14:45 ET",
+    source: "GeckoTerminal",
+    keeperPool: false,
+  },
+  {
+    venue: "Meteora DLMM",
+    pair: "SPCX/USDC",
+    address: "7nVQtYQipN564E9oBi6yZFGox4WL6CR4zsLyYipqgTWu",
+    binStepBps: 20,
+    tvlUsd: 808097,
+    volume24hUsd: 742909,
+    fees24hUsd: 1486,
+    apyPct: null,
+    asOf: "2026-09-25 14:45 ET",
+    source: "GeckoTerminal",
+    keeperPool: false,
+  },
+];
 
 function poolKeeperDropdownHtml(poolAddr) {
   const kbp = (yieldDoc && yieldDoc.keeperByPool && yieldDoc.keeperByPool[poolAddr]) || null;
@@ -1060,17 +1014,14 @@ function toggleKeeperRow(addr8) {
 
 function poolRowsHtml(pools) {
   return pools.map((p) => {
-    const tvl = yNum(p.tvlUsd), vol = yNum(p.volume24hUsd), fees = yNum(p.fees24hUsd);
-    let apy = yNum(p.apyPct);
-    if (apy == null && tvl && fees) apy = (fees / tvl) * 365 * 100;
+    const tvl = yNum(p.tvlUsd), vol = yNum(p.volume24hUsd);
     const addr8 = p.address ? p.address.slice(0, 8) : "";
     const hasKeeper = p.keeperPool && p.address && yieldDoc && yieldDoc.keeperByPool && yieldDoc.keeperByPool[p.address];
     const row = `<tr${p.keeperPool ? ' class="lead-row"' : ""}${hasKeeper ? ` style="cursor:pointer" onclick="toggleKeeperRow('${addr8}')" title="Click to expand keeper performance"` : ""}>
       <td><strong>${esc(p.venue ?? "—")}</strong>${p.keeperPool ? ' <span class="pill active">KEEPER ACTIVE</span>' : ""}${hasKeeper ? ' <span class="dim small">▾</span>' : ""}</td>
       <td><strong>${esc(p.pair ?? "—")}</strong></td>
       <td class="num">${fmtUsd(tvl, 0)}</td>
-      <td class="num">${fmtUsd(vol, 0)}</td>
-      <td class="num">${apy == null ? "—" : apy.toFixed(1) + "%"} <span class="dim small">est.</span></td>
+      <td class="num">${vol == null ? '<span class="dim">—</span>' : fmtUsd(vol, 0)}</td>
       <td class="num">${p.binStepBps != null ? esc(p.binStepBps) + " bps" : "—"}</td>
       <td>${p.address ? addrCell(p.address) : "—"}</td>
     </tr>`;
@@ -1095,12 +1046,18 @@ function keeperHtml(k) {
       ? `<span class="pill active">LIVE · ON-CHAIN</span>`
       : `<span class="pill open">PAPER · SIMULATED</span>`;
   const dep = yNum(k.deployedCapitalUsd), val = yNum(k.currentValueUsd);
-  const pnl = yNum(k.totalPnlUsd);
-  let pnlPct = yNum(k.totalPnlPct);
-  if (pnlPct == null && pnl != null && dep) pnlPct = (pnl / dep) * 100;
   const fees = yNum(k.feesUsd), fx = yNum(k.feesX), fy = yNum(k.feesY);
-  const inv = yNum(k.inventoryPnlUsd), txc = yNum(k.txCostUsd);
   const pos = (k.position && typeof k.position === "object") ? k.position : {};
+  // Our APY from actual earned fees, annualized over the live window.
+  // positionOpenTs comes from the keeper's on-chain open receipt (yield.json).
+  const openTsMs = yNum(k.positionOpenTs) || 1790347405081;
+  const nowMs = Date.now();
+  const daysLive = Math.max(1/24, (nowMs - openTsMs) / 86400000);
+  const ourApy = (fees != null && val) ? (fees / val) * 365 / daysLive * 100 : null;
+  const hoursLive = daysLive * 24;
+  // Est. cumulative volume routed through our bins = fees / fee rate (20bps).
+  // Labeled with the live window since it annualizes over position-open → now.
+  const ourVol = fees != null ? fees / 0.002 : null;
   const range = (pos.lowerBin != null && pos.upperBin != null)
     ? `bins ${esc(pos.lowerBin)}–${esc(pos.upperBin)}`
     : "—";
@@ -1108,52 +1065,40 @@ function keeperHtml(k) {
     ? `${fmtUsd(yNum(pos.priceLow))} – ${fmtUsd(yNum(pos.priceHigh))}`
     : (pos.centerPrice != null ? `@ ${fmtUsd(yNum(pos.centerPrice))}` : "—");
   const width = yNum(pos.halfWidthPct);
-  const bench = (k.bench && typeof k.bench === "object")
-    ? k.bench
-    : ((yieldDoc && yieldDoc.benchmarks) || {});
-  const benchRows = Object.keys(BENCH_LABELS).map((key) => {
-    const v = yNum(bench[key]);
-    const d = (v != null && val != null) ? v - val : null;
-    const note = bench[key + "Note"];
-    return `<tr>
-      <td>${BENCH_LABELS[key]} <span class="dim small">est.</span>${note ? `<br><span class="dim small" style="font-size:10px">${esc(note)}</span>` : ""}</td>
-      <td class="num">${v == null ? '<span class="dim">pending</span>' : fmtUsd(v)}</td>
-      <td class="num">${d == null ? "—" : yPnl(d)}</td>
-    </tr>`;
-  }).join("");
+  // Our share of the MU/USDC pool — TVL from yield.json, refreshed with each export.
+  const poolTvl = (typeof yieldDoc !== "undefined" && yieldDoc && Array.isArray(yieldDoc.pools))
+    ? (yNum((yieldDoc.pools.find(p => p.keeperPool) || {}).tvlUsd))
+    : null;
+  const sharePct = (val != null && poolTvl) ? (val / poolTvl * 100) : null;
 
   return `
   <div class="board-sec">
-    <h3><span style="color:var(--green)">▸ KEEPER PERFORMANCE</span><span class="count">${pill}</span></h3>
+    <h3><span style="color:var(--green)">▸ KEEPER POSITION · MU/USDC</span><span class="count">${pill}</span></h3>
     <div class="yield-hero">
       <div class="yh-stat"><span class="ov-k">DEPLOYED</span><span class="ov-v">${fmtUsd(dep)}</span></div>
-      <div class="yh-stat"><span class="ov-k">CURRENT VALUE</span><span class="ov-v">${fmtUsd(val)}</span></div>
-      <div class="yh-stat"><span class="ov-k">TOTAL PNL</span><span class="ov-v">${yPnl(pnl)}${pnlPct == null ? "" : ` <span class="dim small">(${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)</span>`}</span></div>
+      <div class="yh-stat"><span class="ov-k">OUR POSITION VALUE</span><span class="ov-v">${fmtUsd(val)}</span></div>
       <div class="yh-stat"><span class="ov-k">FEES EARNED</span><span class="ov-v">${fmtUsd(fees, 4)}</span>
         <div class="ov-sub"><div class="row"><span>MU</span><span class="num">${fmtTok(fx)}</span></div>
         <div class="row"><span>USDC</span><span class="num">${fmtTok(fy)}</span></div></div></div>
+      <div class="yh-stat"><span class="ov-k">OUR EST. APY</span><span class="ov-v">${ourApy == null ? "—" : ourApy.toFixed(1) + "%"}</span>
+        <div class="ov-sub"><div class="row"><span class="dim small">annualized · ${hoursLive < 48 ? hoursLive.toFixed(1) + "h" : daysLive.toFixed(1) + "d"} live</span></div></div></div>
+      <div class="yh-stat"><span class="ov-k">OUR VOLUME</span><span class="ov-v">${ourVol == null ? "—" : fmtUsd(ourVol, 0)}</span>
+        <div class="ov-sub"><div class="row"><span class="dim small">est. via our bins · since open</span></div></div></div>
+      <div class="yh-stat"><span class="ov-k">OUR SHARE OF POOL</span><span class="ov-v">${sharePct == null ? "—" : sharePct.toFixed(4) + "%"}</span></div>
     </div>
     <div class="yield-cols">
-      <div class="yield-detail">
-        <div class="row"><span class="k">INVENTORY PNL EX-FEES</span><span class="num">${yPnl(inv)}</span></div>
-        <div class="row"><span class="k">TRANSACTION COSTS</span><span class="num">${fmtUsd(txc)}${k.txCostNote ? `<br><span class="dim small" style="font-size:10px">${esc(k.txCostNote)}</span>` : ""}</span></div>
-        <div class="row"><span class="k">RECENTERS</span><span class="num">${k.recenters != null ? esc(k.recenters) : "—"}</span></div>
-        <div class="row"><span class="k">LAST CHECK</span><span class="num">${k.lastCheckTs ? etFull(Math.floor(Number(k.lastCheckTs) / 1000)) + " ET" : "—"}</span></div>
-      </div>
       <div class="yield-detail">
         <div class="row"><span class="k">POSITION RANGE</span><span class="num">${range}</span></div>
         <div class="row"><span class="k">PRICE BAND</span><span class="num">${band}</span></div>
         <div class="row"><span class="k">HALF-WIDTH</span><span class="num">${width == null ? "—" : "±" + width.toFixed(2) + "%"}</span></div>
+      </div>
+      <div class="yield-detail">
         <div class="row"><span class="k">POSITION ADDRESS</span><span class="num">${pos.positionAddress ? addrCell(pos.positionAddress) : (live ? "—" : '<span class="dim">n/a · paper</span>')}</span></div>
+        <div class="row"><span class="k">OPEN TX</span><span class="num">${pos.openTx ? txLink(pos.openTx) : "—"}</span></div>
+        <div class="row"><span class="k">RECENTERS</span><span class="num">${k.recenters != null ? esc(k.recenters) : "—"}</span></div>
+        <div class="row"><span class="k">LAST CHECK</span><span class="num">${k.lastCheckTs ? etFull(Math.floor(Number(k.lastCheckTs) / 1000)) + " ET" : "—"}</span></div>
       </div>
     </div>
-  </div>
-  <div class="board-sec">
-    <h3><span style="color:var(--blue)">▸ BENCHMARKS</span><span class="count">same capital · same price marks · est.</span></h3>
-    <div class="table-scroll"><table class="term">
-      <thead><tr><th>PORTFOLIO</th><th class="num">VALUE</th><th class="num">VS KEEPER</th></tr></thead>
-      <tbody>${benchRows}</tbody>
-    </table></div>
   </div>`;
 }
 
@@ -1176,7 +1121,7 @@ function renderYield() {
     <div class="board-sec">
       <h3><span style="color:var(--amber)">▸ POOLS</span><span class="count">${pools.length} tracked · ${esc(poolNote)}</span></h3>
       <div class="table-scroll"><table class="term">
-        <thead><tr><th>VENUE</th><th>PAIR</th><th class="num">TVL</th><th class="num">24H VOLUME</th><th class="num">EST. APY</th><th class="num">BIN STEP</th><th>POOL</th></tr></thead>
+        <thead><tr><th>VENUE</th><th>PAIR</th><th class="num">TVL</th><th class="num">24H VOLUME</th><th class="num">BIN STEP</th><th>POOL</th></tr></thead>
         <tbody>${poolRowsHtml(pools)}</tbody>
       </table></div>
     </div>`;
@@ -1186,7 +1131,7 @@ function renderYield() {
         <h3><span style="color:var(--green)">▸ KEEPER PERFORMANCE</span></h3>
         <p class="empty-note">KEEPER OPENING SOON — performance goes live with the first position.</p>
       </div>`;
-  html += `<p class="dim small yield-foot">Est. APY is derived from 24h fees — not a promise. Paper figures are simulated estimates; only on-chain-verified figures are labeled live.</p>`;
+  html += `<p class="dim small yield-foot">TVL and 24h volume from GeckoTerminal, ${doc && doc.updatedTs ? "updated " + et(Math.floor(doc.updatedTs / 1000)) + " ET" : "checked 2026-09-25 ~14:45 ET"}. Our APY is annualized from live on-chain fees earned since the position opened. Only on-chain-verified keeper figures are shown.</p>`;
   body.innerHTML = html;
   if (meta) {
     meta.textContent = k
@@ -1219,13 +1164,7 @@ function startClock() {
         ? ` · next refresh in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s`
         : "";
     }
-    // header countdown — next to the ET clock, never inside the degraded banner
-    const hn = $("refresh-note");
-    if (hn) {
-      hn.textContent = (rpcAuto.timer && rpcAuto.nextAt > Date.now())
-        ? `next refresh in ${Math.ceil((rpcAuto.nextAt - Date.now()) / 1000)}s`
-        : "";
-    }
+    // header countdown removed — no refresh banner
     const qn = document.querySelectorAll(".quote-retry-note");
     if (qn.length) {
       const txt = (quoteAuto.timer && quoteAuto.nextAt > Date.now() && quoteAuto.fails > 0)
@@ -1338,11 +1277,8 @@ async function boot() {
     return;
   }
 
-  // Implied SPCX price from the treasury's own acquisition: $12 → 0.077702 SPCX.
-  // Cross-checks against vesting rows (5.88 / 0.038077 ≈ same).
-  // This is the initial mark; the live Jupiter quote replaces it when the feed is up.
-  const s0 = (snap.vesting?.schedules ?? [])[0];
-  const spcxImplied = s0 ? Number(s0.principalUsd) / Number(s0.principalAmount) : 154.44;
+  // Initial SPCX valuation mark; the live Jupiter quote replaces it when the feed is up.
+  const spcxImplied = 154.44;
 
   // AUM-over-time history (separate committed file, maintained by 06-snapshot.ts).
   const aumHistory = await optional(fetchJson("aum-history.json"));
@@ -1368,7 +1304,6 @@ async function boot() {
     snapshot: snap,
     vaults: snap.vaults ?? {},
     bounties: snap.bounties ?? [],
-    vesting: snap.vesting?.schedules ?? [],
     agents: snap.agents ?? [],
     txRegistry: snap.txRegistry ?? {},
     wireStartTs: snap.wireStartTs ?? null,

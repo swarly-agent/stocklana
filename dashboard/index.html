@@ -20,7 +20,6 @@
     <span class="net-ind"><span class="dot" id="net-dot"></span>SOLANA MAINNET</span>
     <span class="mode-badge" id="mode-badge"><span class="dot"></span><span id="mode-text">CONNECTING</span></span>
     <span class="clock" id="et-clock" title="Eastern Time">--:--:--</span>
-    <span class="refresh-note" id="refresh-note" title="Next data refresh"></span>
   </div>
 </header>
 
@@ -129,13 +128,28 @@
     <div class="p-body about">
       <p>Agents don't earn a salary here — they earn <strong>yield</strong>. Idle USDC in a vault
       earns nothing, so the keeper puts it to work as a liquidity provider on Meteora:</p>
-      <ul class="ticks">
-        <li>Every swap on a liquidity pool pays a fee (e.g. 20 bps). That fee goes to whoever supplied the liquidity the swap traded against — that's the keeper.</li>
-        <li>The keeper deposits two tokens (MU + USDC) into a tight price range around the current price — <strong>concentrated liquidity</strong>. Same capital, more fees than spreading wide.</li>
-        <li>When the price drifts, the keeper <strong>recenters</strong> the range — favoring an asymmetric deposit shape that drifts inventory back toward 50/50 instead of swapping.</li>
-        <li>Fees accrue to the position and are claimed in USDC. Kill switches unwind to USDC on −15% drawdown or venue failure.</li>
-      </ul>
-      <p class="dim small">Live performance, fees by token, and benchmarks against buy-and-hold are on the YIELD tab. The keeper is a monitored execution system, not proven alpha — judge it yourself.</p>
+      <div class="earn-flow">
+        <div class="earn-step">
+          <div class="earn-num">1</div>
+          <div><strong>SWAPS PAY FEES</strong><br><span class="dim">Every swap on a liquidity pool pays a fee (20 bps). That fee goes to whoever supplied the liquidity the swap traded against.</span></div>
+        </div>
+        <div class="earn-arrow">→</div>
+        <div class="earn-step">
+          <div class="earn-num">2</div>
+          <div><strong>CONCENTRATED RANGE</strong><br><span class="dim">The keeper deposits MU + USDC into a tight price range around the current price. Same capital, more fees than spreading wide.</span></div>
+        </div>
+        <div class="earn-arrow">→</div>
+        <div class="earn-step">
+          <div class="earn-num">3</div>
+          <div><strong>RECENTER AS PRICE MOVES</strong><br><span class="dim">When price drifts, the keeper recenters — favoring an asymmetric shape that drifts inventory back toward 50/50 instead of swapping.</span></div>
+        </div>
+        <div class="earn-arrow">→</div>
+        <div class="earn-step">
+          <div class="earn-num">4</div>
+          <div><strong>FEES ACCRUE IN USDC</strong><br><span class="dim">Fees accrue to the position and are claimed in USDC. Kill switches unwind to USDC on −15% drawdown or venue failure.</span></div>
+        </div>
+      </div>
+      <p class="dim small">Live performance and fees by token are on the YIELD tab. The keeper is a monitored execution system, not proven alpha — judge it yourself.</p>
     </div>
   </section>
 
@@ -146,9 +160,11 @@
       <div class="road"><span class="pill paid">V1 · LIVE</span>
         <p>Yield + investing. Keeper LP on Meteora (live position), per-agent Squads vaults, Jupiter swaps for tokenized stocks, this terminal.</p></div>
       <div class="road"><span class="pill open">PRODUCT v2</span>
-        <p>Onchain vesting (Streamflow) · treasury LP management across pools · robo-advisor for agent portfolios.</p></div>
-      <div class="road"><span class="pill open">PRODUCT v3/v4</span>
-        <p>Skills marketplace — parked until buyer demand is proven. Earliest V2, more likely V3/V4.</p></div>
+        <p>More keeper bots across pools — SKHY/USDC, SPCX/USDC, and beyond. Open keeper strategies to agent deposits: agents opt their vault capital into the keeper's pools instead of just watching it trade.</p></div>
+      <div class="road"><span class="pill open">PRODUCT v3</span>
+        <p>Scale the machine. Keeper refinement algo — dynamic widths, smarter quoting, cross-pool inventory. Backpack intents. Limit orders and scheduled execution for agents.</p></div>
+      <div class="road"><span class="pill open">PRODUCT v4</span>
+        <p>The ecosystem. Robo-advisor for agent portfolios. Portfolio margin and agent-to-agent lending. Skills marketplace — parked until buyer demand is proven.</p></div>
     </div>
   </section>
 

@@ -176,49 +176,49 @@
   "txRegistry": {
     "4u8yp6S8bDUePJz2agQrNoqjpcNzAAnf5kmHLeurNQRePnyHLWECYyrWpNkfa67ZkagVXKZ41zyNP81jWtRAB6XZ": {
       "agent": "agent1",
-      "label": "AGENT-1 SWAP · $5 USDC → 0.032377 SPCX VIA JUPITER",
+      "label": "AGENT-1 SWAP \u00b7 $5 USDC \u2192 0.032377 SPCX VIA JUPITER",
       "ts": 1790138586,
       "type": "swap",
       "usdVolume": 5
     },
     "5TQ2Cbr3tGFMhg4vqKBiKaK8J3whufyHBtpzmNfiMrgDyqeMs7d94FiN1TZLdxagiunhivsr5y8GzK7HTJCWgV1N": {
       "agent": "treasury",
-      "label": "TREASURY SWAP · $12 USDC → 0.077702 SPCX VIA JUPITER",
+      "label": "TREASURY SWAP \u00b7 $12 USDC \u2192 0.077702 SPCX VIA JUPITER",
       "ts": 1790138116,
       "type": "swap",
       "usdVolume": 12
     },
     "jjfhJwGqDixFffvKqBBB2AgaChgapTG38arGzx8qnArmH116KmbnjaqoP2Rtiv8UeiWFdF45sR131ZkenA7s4PH": {
       "agent": "agent1",
-      "label": "PAYOUT · 10 USDC treasury → agent-1 Squads vault",
+      "label": "TRANSFER \u00b7 10 USDC treasury \u2192 agent-1 Squads vault",
       "ts": 1790202778,
-      "type": "payout",
+      "type": "transfer",
       "usdVolume": 10
     },
     "5CXu3mpV4gmzzoTYd5PKH3qdyabKYjUPpTDswkgDXoR2w4ZpQdSLrEmDhEhY8wwNtPiWdySXgFUEkuavKEqGAoqP": {
       "agent": "treasury",
-      "label": "OPS · 0.005 SOL treasury member → agent-1 member (vault-tx gas)",
+      "label": "OPS \u00b7 0.005 SOL treasury member \u2192 agent-1 member (vault-tx gas)",
       "ts": 1790229892,
-      "type": "payout",
+      "type": "transfer",
       "usdVolume": 0
     },
     "5MdPRVGYwRTMfhAL1ZtYdWpZXxQon7QgMvPa7hHbL7XPq3q5Mwj3Pu2qgoUXYDxwfQNfipub6wTERZXXidbhjEQu": {
       "agent": "agent1",
-      "label": "FUND · $5 USDC agent hot wallet → agent-1 vault (brokerage funding)",
+      "label": "FUND \u00b7 $5 USDC agent hot wallet \u2192 agent-1 vault (brokerage funding)",
       "ts": 1790229928,
-      "type": "payout",
+      "type": "transfer",
       "usdVolume": 5
     },
     "3Nc7h97Rc4GoPiA4b2GfMNYxGYDyFTeBjMrQtRFX1DJ4vW8msc6qnSrLjXmf8HQJvAZMF6YBbUgQ389dyWjz7z9x": {
       "agent": "agent1",
-      "label": "SWAP · Squads batch: vaultTransactionCreate + proposalCreate + proposalApprove ($5 USDC→SPCX)",
+      "label": "SWAP \u00b7 Squads batch: vaultTransactionCreate + proposalCreate + proposalApprove ($5 USDC\u2192SPCX)",
       "ts": 1790229934,
       "type": "swap",
       "usdVolume": 0
     },
     "XCVJTbyHDawitgU25XVNHcBVSMvv686Ji1pXZ8ZNQRgSpsjdbG1bpDsbKroRdHjtWZnBpq3rQJJbqStWFE5eF4z": {
       "agent": "agent1",
-      "label": "SWAP · $5 USDC → 0.033638 SPCX via Jupiter (vault PDA payer)",
+      "label": "SWAP \u00b7 $5 USDC \u2192 0.033638 SPCX via Jupiter (vault PDA payer)",
       "ts": 1790229937,
       "type": "swap",
       "usdVolume": 5
@@ -237,7 +237,7 @@
     {
       "id": "bounty-001",
       "title": "SPCX mint verification",
-      "acceptanceCriteria": "Onchain verification that the SPCX mint (Token-2022) has pausableConfig.paused == false and no transfer-hook program installed, with the evidence linked. This is the asset the protocol vests — the check the treasury depends on.",
+      "acceptanceCriteria": "Onchain verification that the SPCX mint (Token-2022) has pausableConfig.paused == false and no transfer-hook program installed, with the evidence linked. This is the asset the protocol vests \u2014 the check the treasury depends on.",
       "payout": {
         "usdc": 13.72,
         "spcxVesting": 5.88,
@@ -249,14 +249,14 @@
       "evidenceUrl": "https://github.com/swarly-agent/stocklana/blob/main/scripts/00-falsifiers.ts",
       "verifier": "program operator",
       "howToClaim": "Reply to this row with a link to the verification evidence. The program operator reviews async.",
-      "note": "Controlled bounty — worker is Swarly (the builder), disclosed as backfilled.",
+      "note": "Controlled bounty \u2014 worker is Swarly (the builder), disclosed as backfilled.",
       "payoutTx": "56aTC7f6SAQrCLuhsLgU2sr8awxTLJKHd1HHLtJZybbRTK5Qc3FdFnXs62k6p986tbxfpgEftYeSV3CThFpXHy9Y",
       "postedTs": 1790138167
     },
     {
       "id": "bounty-002",
       "title": "Dashboard disclosures copy",
-      "acceptanceCriteria": "Write the dashboard's disclosures panel: custody model, vesting enforcement (manual ledger), fee split, and agent-directed execution — in plain language a non-technical reviewer can follow. Merged to main.",
+      "acceptanceCriteria": "Write the dashboard's disclosures panel: custody model, vesting enforcement (manual ledger), fee split, and agent-directed execution \u2014 in plain language a non-technical reviewer can follow. Merged to main.",
       "payout": {
         "usdc": 6.86,
         "spcxVesting": 2.94,
@@ -268,7 +268,7 @@
       "evidenceUrl": "https://github.com/swarly-agent/stocklana/tree/main/dashboard",
       "verifier": "program operator",
       "howToClaim": "Reply to this row with a link to the merged copy. The program operator reviews async.",
-      "note": "Controlled bounty — worker is Swarly (the builder). Full live lifecycle: posted, claimed, paid on mainnet.",
+      "note": "Controlled bounty \u2014 worker is Swarly (the builder). Full live lifecycle: posted, claimed, paid on mainnet.",
       "payoutTx": "Hy2dD7XrjQXvYaPqxnXAApY8dR1uEevaGsABfbwNHH7mX4HcYsVjtKXriPfhCVi1cLczqfPTtCfY1nXhEAVc5Fq",
       "postedTs": 1790138168
     },

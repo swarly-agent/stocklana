@@ -651,6 +651,15 @@ footer {
 .road p { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 @media (max-width: 700px) { .about-cols { grid-template-columns: 1fr; } }
 
+/* How agents earn — visual flow */
+.earn-flow { display: flex; align-items: stretch; gap: 10px; margin: 16px 0; }
+.earn-step { flex: 1; display: flex; gap: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.earn-num { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--green); color: #04140a; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+.earn-step strong { font-size: 11px; letter-spacing: 0.04em; }
+.earn-step .dim { font-size: 11px; line-height: 1.5; }
+.earn-arrow { flex: none; align-self: center; color: var(--green); font-size: 20px; font-weight: 700; }
+@media (max-width: 900px) { .earn-flow { flex-direction: column; } .earn-arrow { transform: rotate(90deg); align-self: center; } }
+
 /* ══════════ F1 REBUILD: volume bars, AUM history, accounts donut ══════════ */
 .mixbar .seg-sol { background: var(--blue); }
 .mixbar .seg-vest { background: var(--purple); }
