@@ -134,6 +134,8 @@ code {
 .tape-item { padding: 0 18px; font-size: 11px; letter-spacing: 0.04em; color: var(--text); }
 .tape-item .k { color: var(--dim); }
 .tape-item .up { color: var(--green); }
+.num.pos { color: var(--green); }
+.num.neg { color: var(--red); }
 .tape-item .sep { color: var(--amber); padding-left: 36px; }
 
 /* ══════════ SNAPSHOT BANNER ══════════ */

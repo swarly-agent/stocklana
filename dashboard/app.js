@@ -1034,6 +1034,9 @@ function keeperHtml(k) {
       ? `<span class="pill active">LIVE · ON-CHAIN</span>`
       : `<span class="pill open">PAPER · SIMULATED</span>`;
   const dep = yNum(k.deployedCapitalUsd), val = yNum(k.currentValueUsd);
+  // Simple net P&L since deposit: total value (position + wallet) minus deployed.
+  // V1 only — multi-deposit attribution comes later with keeper vault deposits.
+  const pnl = yNum(k.totalPnlUsd), pnlPct = yNum(k.totalPnlPct);
   const fees = yNum(k.feesUsd), fx = yNum(k.feesX), fy = yNum(k.feesY);
   const pos = (k.position && typeof k.position === "object") ? k.position : {};
   // Our APY from actual earned fees, annualized over the live window.
@@ -1064,7 +1067,8 @@ function keeperHtml(k) {
     <h3><span style="color:var(--green)">▸ KEEPER POSITION · MU/USDC</span><span class="count">${pill}</span></h3>
     <div class="yield-hero">
       <div class="yh-stat"><span class="ov-k">DEPLOYED</span><span class="ov-v">${fmtUsd(dep)}</span></div>
-      <div class="yh-stat"><span class="ov-k">OUR POSITION VALUE</span><span class="ov-v">${fmtUsd(val)}</span></div>
+      <div class="yh-stat"><span class="ov-k">OUR POSITION VALUE</span><span class="ov-v">${fmtUsd(val)}</span>
+        <div class="ov-sub"><div class="row"><span class="dim small">net P&amp;L since deposit</span><span class="num ${pnl >= 0 ? "pos" : "neg"}">${pnl >= 0 ? "+" : ""}${fmtUsd(pnl)} (${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%)</span></div></div></div>
       <div class="yh-stat"><span class="ov-k">FEES EARNED</span><span class="ov-v">${fmtUsd(fees, 4)}</span>
         <div class="ov-sub"><div class="row"><span>MU</span><span class="num">${fmtTok(fx)}</span></div>
         <div class="row"><span>USDC</span><span class="num">${fmtTok(fy)}</span></div></div></div>
