@@ -25,12 +25,14 @@ This isn't a mockup. Every address below is on Solana mainnet, verifiable right 
 - **Treasury vault** (Squads, 1-of-2): `Bjv8VJdAZqtYW3cz5nfNEnVZx2WwWMA1quqgPRGVQMTp`
 - **Agent One vault** (Squads, 1-of-1): `HkSofdPwKHq6cp5Ej36KaLCMHU15U518HwyJY2fNd9Yi`
 - **10 USDC treasury → Agent One** (tx: `jjfhJwGqDixFffvKqBBB2AgaChgapTG38arGzx8qnArmH116KmbnjaqoP2Rtiv8UeiWFdF45sR131ZkenA7s4PH`) — the micropayment leg, live and verified.
-- **LP keeper position** (Meteora DLMM, MU/USDC): `[POSITION ADDRESS + OPEN TX — fills at go-live]`
+- **LP keeper position** (Meteora DLMM, MU/USDC): `J3BRDm4HKG7Ni6Eo6SEWLLeuKzdEPfXW2FAvG59pieSp` (open tx: `4XjBMScABjmReYBbuytBbJCLQiBpUbVsZvzG9DEVuKRukVzubYdpT5k74RZdk9NX6r5gAFfXxYjiMYJ5vpg6bFye`, 21-bin range 3487–3507, opened 2026-09-25)
 - **Keeper hot key** (dedicated, position funds only): `5gAvoSDJckFFDPqKeEiQjXL5TJcysMeqFoHxUEokaiMJ`
 
 ## The keeper, honestly
 
 It's a monitored LP execution system, not proven strategy alpha. $100 in a concentrated range on a $4.8M pool: the edge, if any, is tight inventory management (asymmetric bin skew back toward 50/50, swaps only as a last resort past 80/20), fee capture, and not paying for churn (cost guard, cooldown, no weekend recenters). Kill switches unwind to USDC at -15% drawdown or on venue failure. The dashboard shows the keeper against four benchmarks so you can judge it yourself.
+
+As of submission: the position is live and the keeper is monitoring on a 5-minute check loop. No recenter has triggered yet (price hasn't displaced). The recenter path — atomic `rebalance_liquidity` with the keeper's skewed deposit strategy — was validated by exact-transaction simulation against the live position before the keeper was cleared to run it.
 
 ## The architecture
 

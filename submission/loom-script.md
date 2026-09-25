@@ -30,11 +30,13 @@ Watch the micropayment leg: 10 USDC moved from the treasury straight into Agent 
 
 "Now the part that makes it a brokerage, not a payments app. The keeper took $100 and opened a concentrated position in the MU/USDC pool on Meteora — here's the position, here's the open transaction.
 
-It checks the market every five minutes. When the price drifts, it recenters the range — favoring asymmetric bins to drift back to 50/50 rather than swapping. Fees get claimed and held in USDC. And if anything goes wrong — a 15% drawdown, a frozen mint, an unreadable pool — it unwinds to USDC and halts.
+It checks the market every five minutes. When the price drifts far enough, it recenters the range — favoring asymmetric bins to drift back to 50/50 rather than swapping. Fees get claimed and held in USDC. And if anything goes wrong — a 15% drawdown, a frozen mint, an unreadable pool — it unwinds to USDC and halts.
+
+The position just opened, so no recenter has triggered yet — but the recenter path was validated by exact simulation against this live position before the keeper was cleared to run it.
 
 I'm not going to tell you it's proven alpha. It's a monitored execution system, and the dashboard shows it against four benchmarks — buy-and-hold, a static wide LP, periodic rebalancing, manual recentering — so you can judge it yourself."
 
-*[Show the Meteora position, a recenter receipt]*
+*[Show the Meteora position and the open transaction]*
 
 ## [2:10-2:40] The yield page
 
